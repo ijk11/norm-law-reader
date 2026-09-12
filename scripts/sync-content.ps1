@@ -1,23 +1,37 @@
 param(
-    [string]$SourceDirectory = (Join-Path $PSScriptRoot '..\..')
+    [string]$SourceDirectory = (Join-Path $PSScriptRoot '..\..'),
+    [string]$EnglishSourceDirectory = (Join-Path $PSScriptRoot '..\..\..\md\영미')
 )
 
 $ErrorActionPreference = 'Stop'
-$sourceRoot = (Resolve-Path -LiteralPath $SourceDirectory).Path
 $appRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $outputPath = Join-Path $appRoot 'dist\content.js'
 
-$documents = Get-ChildItem -LiteralPath $sourceRoot -File -Filter '*.md' |
-    Where-Object { $_.Name -ne '_작업메모.md' } |
-    Sort-Object Name |
-    ForEach-Object {
+$sources = @(
+    [pscustomobject]@{
+        Path = (Resolve-Path -LiteralPath $SourceDirectory).Path
+        Collection = '일본'
+    },
+    [pscustomobject]@{
+        Path = (Resolve-Path -LiteralPath $EnglishSourceDirectory).Path
+        Collection = '영미'
+    }
+)
+
+$documents = $sources | ForEach-Object {
+    $source = $_
+    Get-ChildItem -LiteralPath $source.Path -File -Filter '*.md' |
+        Where-Object { $_.Name -ne '_작업메모.md' } |
+        ForEach-Object {
         $content = Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8
         $titleMatch = [regex]::Match($content, '(?m)^#\s+(.+)$')
         $title = if ($titleMatch.Success) { $titleMatch.Groups[1].Value.Trim() } else { $_.BaseName }
         $yearMatch = [regex]::Match($content.Substring(0, [Math]::Min($content.Length, 5000)), '(?:19|20)\d{2}')
         $year = if ($yearMatch.Success) { [int]$yearMatch.Value } else { $null }
 
-        $group = if ($_.Name.StartsWith('이이다 다카시')) {
+        $group = if ($source.Collection -eq '영미') {
+            '영미 논문'
+        } elseif ($_.Name.StartsWith('이이다 다카시')) {
             '이이다 연구'
         } elseif ($_.Name.StartsWith('후지타 도모타카')) {
             '후지타 연구선'
@@ -48,6 +62,7 @@ $documents = Get-ChildItem -LiteralPath $sourceRoot -File -Filter '*.md' |
         [ordered]@{
             id = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($_.Name)).TrimEnd('=').Replace('+', '-').Replace('/', '_')
             file = $_.Name
+            collection = $source.Collection
             title = $title
             author = $author
             group = $group
@@ -57,6 +72,7 @@ $documents = Get-ChildItem -LiteralPath $sourceRoot -File -Filter '*.md' |
             words = ([regex]::Matches($content, '[가-힣A-Za-z0-9一-龠ぁ-んァ-ヶ]+')).Count
         }
     }
+} | Sort-Object group, file
 
 $json = ConvertTo-Json -InputObject @($documents) -Depth 5 -Compress
 $payload = "window.MD_DOCUMENTS = $json;`n"

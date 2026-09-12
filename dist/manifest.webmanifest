@@ -1,7 +1,7 @@
 {
   "name": "규범과 법 · 문서 리더",
   "short_name": "규범과 법",
-  "description": "일본 법·사회규범 연구 Markdown 자료를 편안하게 읽는 오프라인 리더",
+  "description": "일본·영미 법과 사회규범 연구 Markdown 자료를 편안하게 읽는 오프라인 리더",
   "lang": "ko",
   "start_url": "./",
   "scope": "./",

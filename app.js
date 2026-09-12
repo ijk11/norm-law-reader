@@ -4,6 +4,7 @@
   const documents = Array.isArray(window.MD_DOCUMENTS) ? window.MD_DOCUMENTS : [];
   const STORAGE_KEY = "norm-law-reader:v1";
   const PROGRESS_KEY = "norm-law-reader:progress:v1";
+  const HIGHLIGHTS_KEY = "norm-law-reader:highlights:v1";
   const mediaDark = window.matchMedia("(prefers-color-scheme: dark)");
 
   const icons = {
@@ -20,11 +21,13 @@
     file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/></svg>',
     top: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 6-6 6 6M12 8v11"/></svg>',
     chevronLeft: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>',
-    chevronRight: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>'
+    chevronRight: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
+    highlighter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.5 4.5 4 4L10 18H6v-4l9.5-9.5Z"/><path d="m13.5 6.5 4 4M4 21h16"/></svg>'
   };
 
   const preferences = readJson(STORAGE_KEY, {});
   const savedProgress = readJson(PROGRESS_KEY, {});
+  const savedHighlights = readJson(HIGHLIGHTS_KEY, {});
   const params = new URLSearchParams(location.search);
   const requestedId = params.get("doc");
   const defaultDoc = documents.find((doc) => doc.file.includes("수리모델에서의 법")) || documents[0];
@@ -44,7 +47,8 @@
     drawer: null,
     installPrompt: null,
     scrollTicking: false,
-    activeHeading: null
+    activeHeading: null,
+    pendingHighlight: null
   };
 
   const groupOrder = ["영미 논문", "후지타 연구선", "이이다 연구", "서평"];
@@ -99,6 +103,7 @@
             <strong></strong>
           </div>
           <div class="toolbar-actions">
+            <button class="text-button highlight-trigger desktop-highlight" type="button" aria-label="선택한 문장에 형광펜 표시">${icons.highlighter}<span class="button-label">형광펜</span></button>
             <button class="text-button install-button" type="button" hidden>${icons.download}<span class="button-label">앱 설치</span></button>
             <button class="icon-button theme-trigger" type="button" aria-label="화면 테마 전환">${icons.moon}</button>
             <button class="icon-button settings-trigger" type="button" aria-label="읽기 설정 열기">${icons.settings}</button>
@@ -122,6 +127,7 @@
         <nav class="mobile-bottom-bar" aria-label="모바일 읽기 도구">
           <button class="bottom-button open-library" type="button">${icons.book}<span>문서함</span></button>
           <button class="bottom-button open-toc" type="button">${icons.list}<span>목차</span></button>
+          <button class="bottom-button highlight-trigger" type="button" aria-label="선택한 문장에 형광펜 표시">${icons.highlighter}<span>형광펜</span></button>
           <button class="bottom-button toggle-theme" type="button">${icons.moon}<span>테마</span></button>
           <button class="bottom-button settings-trigger" type="button">${icons.settings}<span>설정</span></button>
           <button class="bottom-button scroll-top" type="button">${icons.top}<span>맨 위</span></button>
@@ -158,6 +164,10 @@
             <button class="segment-button" type="button" data-value="compact">촘촘하게</button>
             <button class="segment-button" type="button" data-value="relaxed">여유롭게</button>
           </div>
+        </section>
+        <section class="setting-group">
+          <div class="setting-label"><span>형광펜</span><span class="setting-value highlight-summary">표시 없음</span></div>
+          <p class="install-tip">본문을 드래그해 선택한 뒤 ‘형광펜’을 누르세요. 표시된 구절을 다시 누르면 지워집니다. 형광펜은 이 기기에 자동 저장됩니다.</p>
         </section>
         <section class="setting-group">
           <div class="setting-label"><span>오프라인 읽기</span></div>
@@ -252,6 +262,7 @@
     const body = app.querySelector(".markdown-body");
     body.classList.toggle("font-sans", state.font === "sans");
     body.innerHTML = renderMarkdown(withoutTitle);
+    restoreHighlights(body);
     decorateHeadings(body);
     renderTableOfContents(body);
     renderPager(doc);
@@ -259,6 +270,8 @@
 
     renderLibrary();
     updateThemeButtons();
+    state.pendingHighlight = null;
+    updateHighlightControls();
 
     const url = new URL(location.href);
     url.searchParams.set("doc", doc.id);
@@ -356,6 +369,18 @@
     });
 
     app.addEventListener("click", (event) => {
+      const highlightButton = event.target.closest(".highlight-trigger");
+      if (highlightButton) {
+        addHighlightFromSelection();
+        return;
+      }
+
+      const highlightMark = event.target.closest(".text-highlight[data-highlight-id]");
+      if (highlightMark && window.getSelection()?.isCollapsed) {
+        removeHighlight(highlightMark.dataset.highlightId);
+        return;
+      }
+
       const docButton = event.target.closest("[data-doc-id]");
       if (docButton) {
         selectDocument(docButton.dataset.docId);
@@ -428,6 +453,8 @@
       if (state.theme === "system") applyPreferences();
     });
 
+    document.addEventListener("selectionchange", captureArticleSelection);
+
     document.addEventListener("keydown", (event) => {
       const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "");
       if (event.key === "/" && !typing) {
@@ -435,8 +462,207 @@
         if (innerWidth <= 780) openDrawer("library");
         requestAnimationFrame(() => searchInput.focus());
       }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLocaleLowerCase("en") === "h" && !typing) {
+        event.preventDefault();
+        addHighlightFromSelection();
+      }
+      const highlightMark = event.target.closest?.(".text-highlight[data-highlight-id]");
+      if (highlightMark && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        removeHighlight(highlightMark.dataset.highlightId);
+      }
       if (event.key === "Escape") closeDrawers();
     });
+  }
+
+  function captureArticleSelection() {
+    const selection = window.getSelection();
+    const body = app.querySelector(".markdown-body");
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !body) {
+      state.pendingHighlight = null;
+      updateHighlightControls();
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    if (!body.contains(range.startContainer) || !body.contains(range.endContainer)) {
+      state.pendingHighlight = null;
+      updateHighlightControls();
+      return;
+    }
+
+    const offsets = rangeToTextOffsets(body, range);
+    const text = body.textContent || "";
+    let start = offsets.start;
+    let end = offsets.end;
+    while (start < end && /\s/.test(text[start])) start += 1;
+    while (end > start && /\s/.test(text[end - 1])) end -= 1;
+
+    if (end <= start) {
+      state.pendingHighlight = null;
+      updateHighlightControls();
+      return;
+    }
+
+    state.pendingHighlight = {
+      docId: state.currentId,
+      start,
+      end,
+      quote: text.slice(start, end)
+    };
+    updateHighlightControls();
+  }
+
+  function rangeToTextOffsets(root, range) {
+    const startRange = document.createRange();
+    startRange.selectNodeContents(root);
+    startRange.setEnd(range.startContainer, range.startOffset);
+    const endRange = document.createRange();
+    endRange.selectNodeContents(root);
+    endRange.setEnd(range.endContainer, range.endOffset);
+    return { start: startRange.toString().length, end: endRange.toString().length };
+  }
+
+  function addHighlightFromSelection() {
+    const pending = state.pendingHighlight;
+    if (!pending || pending.docId !== state.currentId) {
+      showToast("먼저 본문에서 표시할 문장을 선택하세요.");
+      return;
+    }
+
+    const body = app.querySelector(".markdown-body");
+    const bodyText = body?.textContent || "";
+    if (!body || bodyText.slice(pending.start, pending.end) !== pending.quote) {
+      state.pendingHighlight = null;
+      updateHighlightControls();
+      showToast("선택 위치가 바뀌었습니다. 문장을 다시 선택해 주세요.");
+      return;
+    }
+
+    const current = validHighlightsForDocument(state.currentId, bodyText);
+    const overlapping = current.filter((item) => pending.start <= item.end && pending.end >= item.start);
+    const start = Math.min(pending.start, ...overlapping.map((item) => item.start));
+    const end = Math.max(pending.end, ...overlapping.map((item) => item.end));
+    const overlappingIds = new Set(overlapping.map((item) => item.id));
+    const id = window.crypto?.randomUUID?.() || `highlight-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    savedHighlights[state.currentId] = [
+      ...current.filter((item) => !overlappingIds.has(item.id)),
+      { id, start, end, quote: bodyText.slice(start, end) }
+    ].sort((a, b) => a.start - b.start);
+
+    const stored = saveHighlights();
+    restoreHighlights(body);
+    state.pendingHighlight = null;
+    window.getSelection()?.removeAllRanges();
+    updateHighlightControls();
+    if (stored) showToast("형광펜을 저장했습니다.");
+  }
+
+  function removeHighlight(id) {
+    const current = Array.isArray(savedHighlights[state.currentId]) ? savedHighlights[state.currentId] : [];
+    const next = current.filter((item) => item.id !== id);
+    if (next.length === current.length) return;
+    savedHighlights[state.currentId] = next;
+    const stored = saveHighlights();
+    restoreHighlights(app.querySelector(".markdown-body"));
+    updateHighlightControls();
+    if (stored) showToast("형광펜을 지웠습니다.");
+  }
+
+  function restoreHighlights(body) {
+    if (!body) return;
+    body.querySelectorAll(".text-highlight[data-highlight-id]").forEach((mark) => {
+      mark.replaceWith(document.createTextNode(mark.textContent || ""));
+    });
+    body.normalize();
+
+    const text = body.textContent || "";
+    const highlights = validHighlightsForDocument(state.currentId, text);
+    savedHighlights[state.currentId] = highlights;
+    highlights
+      .slice()
+      .sort((a, b) => b.start - a.start)
+      .forEach((item) => wrapTextRange(body, item));
+  }
+
+  function validHighlightsForDocument(docId, text) {
+    const source = Array.isArray(savedHighlights[docId]) ? savedHighlights[docId] : [];
+    return source
+      .map((item) => {
+        if (!item || typeof item.quote !== "string" || !item.quote) return null;
+        let start = Number(item.start);
+        let end = Number(item.end);
+        if (!Number.isInteger(start) || !Number.isInteger(end) || text.slice(start, end) !== item.quote) {
+          const found = text.indexOf(item.quote);
+          if (found < 0 || text.indexOf(item.quote, found + 1) >= 0) return null;
+          start = found;
+          end = found + item.quote.length;
+        }
+        if (start < 0 || end <= start || end > text.length) return null;
+        return { id: String(item.id || `highlight-${start}-${end}`), start, end, quote: item.quote };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.start - b.start);
+  }
+
+  function wrapTextRange(root, highlight) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const segments = [];
+    let offset = 0;
+    let node;
+    while ((node = walker.nextNode())) {
+      const nextOffset = offset + node.nodeValue.length;
+      if (nextOffset > highlight.start && offset < highlight.end) {
+        segments.push({
+          node,
+          start: Math.max(0, highlight.start - offset),
+          end: Math.min(node.nodeValue.length, highlight.end - offset)
+        });
+      }
+      offset = nextOffset;
+      if (offset >= highlight.end) break;
+    }
+
+    segments.reverse().forEach((segment) => {
+      if (segment.end <= segment.start) return;
+      const range = document.createRange();
+      range.setStart(segment.node, segment.start);
+      range.setEnd(segment.node, segment.end);
+      const mark = document.createElement("mark");
+      mark.className = "text-highlight";
+      mark.dataset.highlightId = highlight.id;
+      mark.setAttribute("role", "button");
+      mark.setAttribute("aria-label", `형광펜 지우기: ${highlight.quote.slice(0, 80)}`);
+      mark.title = "눌러서 형광펜 지우기";
+      range.surroundContents(mark);
+    });
+
+    const marks = [...root.querySelectorAll(`.text-highlight[data-highlight-id="${cssEscape(highlight.id)}"]`)];
+    marks.forEach((mark, index) => {
+      mark.tabIndex = index === 0 ? 0 : -1;
+    });
+  }
+
+  function updateHighlightControls() {
+    const count = Array.isArray(savedHighlights[state.currentId]) ? savedHighlights[state.currentId].length : 0;
+    const ready = Boolean(state.pendingHighlight && state.pendingHighlight.docId === state.currentId);
+    app.querySelectorAll(".highlight-trigger").forEach((button) => {
+      button.dataset.ready = String(ready);
+      button.dataset.count = count ? String(count) : "";
+      button.setAttribute("aria-label", ready ? "선택한 문장에 형광펜 표시" : `형광펜: 현재 문서 ${count}개 저장됨`);
+    });
+    const summary = app.querySelector(".highlight-summary");
+    if (summary) summary.textContent = count ? `${count}개 저장됨` : "표시 없음";
+  }
+
+  function saveHighlights() {
+    try {
+      localStorage.setItem(HIGHLIGHTS_KEY, JSON.stringify(savedHighlights));
+      return true;
+    } catch (_) {
+      showToast("브라우저 저장공간을 사용할 수 없어 형광펜을 저장하지 못했습니다.");
+      return false;
+    }
   }
 
   function updateSetting(setting, value) {

@@ -498,6 +498,11 @@ select:focus-visible,
   white-space: nowrap;
 }
 
+.text-button svg {
+  width: 18px;
+  height: 18px;
+}
+
 .install-button {
   border-color: transparent;
   background: var(--navy);
@@ -506,6 +511,34 @@ select:focus-visible,
 
 .install-button:hover {
   background: var(--navy-2);
+}
+
+.highlight-trigger {
+  position: relative;
+}
+
+.highlight-trigger[data-ready="true"] {
+  border-color: #e6bd36;
+  background: #fff1a8;
+  color: #4a3900;
+  box-shadow: 0 0 0 3px rgba(230, 189, 54, 0.16);
+}
+
+.highlight-trigger[data-count]:not([data-count=""])::after {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  place-items: center;
+  border: 2px solid var(--paper);
+  border-radius: 99px;
+  background: #d5a411;
+  color: #fff;
+  content: attr(data-count);
+  font: 700 0.62rem/1 Inter, sans-serif;
 }
 
 .install-button[hidden] {
@@ -667,6 +700,29 @@ select:focus-visible,
 
 .markdown-body em {
   color: var(--ink-soft);
+}
+
+.markdown-body .text-highlight {
+  margin: 0 -0.02em;
+  padding: 0.06em 0.04em;
+  border-radius: 0.14em;
+  background: linear-gradient(180deg, transparent 8%, #ffe36d 8%, #ffe36d 91%, transparent 91%);
+  color: inherit;
+  cursor: pointer;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.markdown-body .text-highlight:hover,
+.markdown-body .text-highlight:focus-visible {
+  background: linear-gradient(180deg, transparent 5%, #ffd43f 5%, #ffd43f 94%, transparent 94%);
+  outline: 2px solid color-mix(in srgb, #d5a411 55%, transparent);
+  outline-offset: 1px;
+}
+
+:root[data-theme="dark"] .markdown-body .text-highlight {
+  background: linear-gradient(180deg, transparent 8%, rgba(219, 173, 31, 0.72) 8%, rgba(219, 173, 31, 0.72) 91%, transparent 91%);
+  color: #fff7d1;
 }
 
 .markdown-body a {
@@ -1167,7 +1223,8 @@ select:focus-visible,
   }
 
   .toolbar-actions .settings-trigger,
-  .toolbar-actions .theme-trigger {
+  .toolbar-actions .theme-trigger,
+  .toolbar-actions .desktop-highlight {
     display: none;
   }
 
@@ -1234,7 +1291,7 @@ select:focus-visible,
     position: relative;
     z-index: 24;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     padding: 0.32rem 0.35rem calc(0.32rem + var(--safe-bottom));
     border-top: 1px solid var(--line);
     background: color-mix(in srgb, var(--paper) 94%, transparent);

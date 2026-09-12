@@ -2,6 +2,10 @@
 
 상위 폴더의 논문 해설 Markdown 13편을 모바일과 데스크톱에서 읽기 위한 정적 PWA입니다.
 
+## 배포 주소
+
+[GitHub Pages에서 문서 리더 열기](https://ijk11.github.io/norm-law-reader/)
+
 ## 원문을 수정한 뒤 동기화
 
 PowerShell에서 `md-reader` 폴더를 기준으로 다음을 실행합니다.

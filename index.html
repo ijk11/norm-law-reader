@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#111d3b" />
+    <meta name="description" content="일본 법·사회규범 연구 자료를 편안하게 읽는 오프라인 문서 리더" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
+    <title>규범과 법 · 문서 리더</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <aside class="library" aria-label="문서 목록"></aside>
+      <main class="reader" aria-live="polite">
+        <p class="boot-message">문서를 준비하고 있습니다…</p>
+      </main>
+    </div>
+    <script src="./content.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

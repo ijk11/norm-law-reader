@@ -1,10 +1,10 @@
-const CACHE_NAME = "norm-law-reader-v7";
+const CACHE_NAME = "norm-law-reader-v8";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=7",
-  "./app.js?v=7",
-  "./content.js?v=7",
+  "./styles.css?v=8",
+  "./app.js?v=8",
+  "./content.js?v=8",
   "./manifest.webmanifest",
   "./favicon.svg",
   "./icon-192.png",

@@ -50,7 +50,14 @@
     installPrompt: null,
     scrollTicking: false,
     activeHeading: null,
-    pendingHighlight: null
+    pendingHighlight: null,
+    pageOffsets: [0],
+    currentPage: 0,
+    pageLayoutFrame: null,
+    pageTurnTimer: null,
+    pageTurnLocked: false,
+    resizeTimer: null,
+    resizeProgress: null
   };
 
   const groupOrder = ["영미 논문", "후지타 연구선", "이이다 연구", "서평"];
@@ -119,6 +126,11 @@
               <nav class="article-pager" aria-label="이전·다음 문서"></nav>
             </article>
           </section>
+          <nav class="page-turner" aria-label="책장 넘기기">
+            <button class="page-turn-button page-previous" type="button" aria-label="이전 쪽">${icons.chevronLeft}<span>이전 쪽</span></button>
+            <output class="page-counter" aria-live="polite" aria-atomic="true">1 / 1쪽</output>
+            <button class="page-turn-button page-next" type="button" aria-label="다음 쪽"><span>다음 쪽</span>${icons.chevronRight}</button>
+          </nav>
           <aside class="toc-panel" aria-label="이 문서의 목차">
             <div class="toc-inner">
               <p class="toc-heading">이 문서의 목차</p>
@@ -132,7 +144,7 @@
           <button class="bottom-button highlight-trigger" type="button" aria-label="선택한 문장에 형광펜 표시">${icons.highlighter}<span>형광펜</span></button>
           <button class="bottom-button toggle-theme" type="button">${icons.moon}<span>테마</span></button>
           <button class="bottom-button settings-trigger" type="button">${icons.settings}<span>설정</span></button>
-          <button class="bottom-button scroll-top" type="button">${icons.top}<span>맨 위</span></button>
+          <button class="bottom-button scroll-top" type="button">${icons.top}<span>첫 쪽</span></button>
         </nav>
       </main>
       <button class="drawer-backdrop" type="button" aria-label="패널 닫기"></button>
@@ -166,6 +178,10 @@
             <button class="segment-button" type="button" data-value="compact">촘촘하게</button>
             <button class="segment-button" type="button" data-value="relaxed">여유롭게</button>
           </div>
+        </section>
+        <section class="setting-group">
+          <div class="setting-label"><span>책장 넘기기</span><span class="setting-value">화살표 방식</span></div>
+          <p class="install-tip">아래의 좌우 화살표로 한 쪽씩 넘깁니다. 컴퓨터에서는 방향키·Page Up·Page Down과 마우스 휠도 사용할 수 있습니다. 쪽 끝의 몇 줄은 다음 쪽에 한 번 더 보여 문장이 끊겨도 놓치지 않게 했습니다.</p>
         </section>
         <section class="setting-group">
           <div class="setting-label"><span>형광펜</span><span class="setting-value highlight-summary">표시 없음</span></div>
@@ -281,12 +297,17 @@
 
     const scroller = app.querySelector(".article-scroll");
     requestAnimationFrame(() => {
+      calculatePages();
       if (restorePosition) {
         const ratio = clamp(Number(savedProgress[doc.id]) || 0, 0, 1);
-        scroller.scrollTop = ratio * Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+        const target = ratio * Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+        state.currentPage = nearestPageIndex(target);
+        scroller.scrollTop = state.pageOffsets[state.currentPage] || 0;
       } else {
+        state.currentPage = 0;
         scroller.scrollTop = 0;
       }
+      updatePageControls();
       updateReadingProgress();
       updateActiveHeading();
       scroller.focus({ preventScroll: true });
@@ -400,8 +421,20 @@
       if (tocLink) {
         event.preventDefault();
         const heading = document.getElementById(tocLink.dataset.headingId);
-        heading?.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (heading) {
+          const target = scroller.scrollTop + heading.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+          turnToPage(nearestPageIndex(target));
+        }
         closeDrawers();
+        return;
+      }
+
+      if (event.target.closest(".page-previous")) {
+        turnPage(-1);
+        return;
+      }
+      if (event.target.closest(".page-next")) {
+        turnPage(1);
         return;
       }
 
@@ -410,7 +443,7 @@
       if (event.target.closest(".settings-trigger")) openDrawer("settings");
       if (event.target.closest(".library-close, .close-panel, .drawer-backdrop")) closeDrawers();
       if (event.target.closest(".theme-trigger, .toggle-theme")) toggleTheme();
-      if (event.target.closest(".scroll-top")) scroller.scrollTo({ top: 0, behavior: "smooth" });
+      if (event.target.closest(".scroll-top")) turnToPage(0);
       if (event.target.closest(".install-button")) installApp();
 
       const settingButton = event.target.closest(".segment-button");
@@ -418,9 +451,11 @@
     });
 
     app.querySelector("#font-size").addEventListener("input", (event) => {
+      const ratio = currentReadingRatio();
       state.fontSize = Number(event.target.value);
       applyPreferences();
       savePreferences();
+      schedulePageLayout(ratio);
     });
 
     scroller.addEventListener("scroll", () => {
@@ -432,6 +467,50 @@
         state.scrollTicking = false;
       });
     }, { passive: true });
+
+    scroller.addEventListener("wheel", (event) => {
+      const horizontalTableMove = event.target.closest?.(".table-scroll") && Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      if (horizontalTableMove) return;
+      event.preventDefault();
+      if (state.pageTurnLocked || Math.max(Math.abs(event.deltaY), Math.abs(event.deltaX)) < 4) return;
+      state.pageTurnLocked = true;
+      const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+      turnPage(delta > 0 ? 1 : -1);
+      window.setTimeout(() => {
+        state.pageTurnLocked = false;
+      }, 560);
+    }, { passive: false });
+
+    let touchStart = null;
+    scroller.addEventListener("touchstart", (event) => {
+      if (event.touches.length !== 1 || event.target.closest?.("a, button, .table-scroll, .text-highlight")) {
+        touchStart = null;
+        return;
+      }
+      touchStart = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+    }, { passive: true });
+    scroller.addEventListener("touchend", (event) => {
+      if (!touchStart || !event.changedTouches.length || !window.getSelection()?.isCollapsed) {
+        touchStart = null;
+        return;
+      }
+      const deltaX = event.changedTouches[0].clientX - touchStart.x;
+      const deltaY = event.changedTouches[0].clientY - touchStart.y;
+      touchStart = null;
+      if (Math.abs(deltaX) < 56 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.15) return;
+      turnPage(deltaX < 0 ? 1 : -1);
+    }, { passive: true });
+
+    window.addEventListener("resize", () => {
+      if (state.resizeProgress === null) state.resizeProgress = currentReadingRatio();
+      window.clearTimeout(state.resizeTimer);
+      state.resizeTimer = window.setTimeout(() => {
+        schedulePageLayout(state.resizeProgress);
+        state.resizeProgress = null;
+      }, 120);
+    });
+
+    document.fonts?.ready.then(() => schedulePageLayout(currentReadingRatio()));
 
     window.addEventListener("popstate", (event) => {
       const id = event.state?.docId || new URLSearchParams(location.search).get("doc");
@@ -474,6 +553,18 @@
         removeHighlight(highlightMark.dataset.highlightId);
       }
       if (event.key === "Escape") closeDrawers();
+
+      const selection = window.getSelection();
+      const inArticle = event.target === scroller || event.target.closest?.(".article-scroll");
+      const interactive = event.target.closest?.("a, button, input, textarea, select, .text-highlight");
+      const pageKey = ["ArrowLeft", "ArrowRight", "PageUp", "PageDown", "Home", "End", " "].includes(event.key);
+      if (!typing && !interactive && !state.drawer && inArticle && pageKey && (!selection || selection.isCollapsed) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        if (event.key === "ArrowLeft" || event.key === "PageUp" || (event.key === " " && event.shiftKey)) turnPage(-1);
+        else if (event.key === "Home") turnToPage(0);
+        else if (event.key === "End") turnToPage(state.pageOffsets.length - 1);
+        else turnPage(1);
+      }
     });
   }
 
@@ -668,11 +759,13 @@
   }
 
   function updateSetting(setting, value) {
+    const ratio = currentReadingRatio();
     if (setting === "theme" && ["system", "light", "dark"].includes(value)) state.theme = value;
     if (setting === "font" && ["serif", "sans"].includes(value)) state.font = value;
     if (setting === "leading" && ["compact", "relaxed"].includes(value)) state.leading = value;
     applyPreferences();
     savePreferences();
+    if (setting === "font" || setting === "leading") schedulePageLayout(ratio);
   }
 
   function applyPreferences() {
@@ -712,6 +805,96 @@
     state.theme = currentlyDark ? "light" : "dark";
     applyPreferences();
     savePreferences();
+  }
+
+  function currentReadingRatio() {
+    const scroller = app.querySelector(".article-scroll");
+    if (!scroller) return 0;
+    const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    return max ? clamp(scroller.scrollTop / max, 0, 1) : 0;
+  }
+
+  function calculatePages() {
+    const scroller = app.querySelector(".article-scroll");
+    if (!scroller) return;
+    const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const overlap = clamp(scroller.clientHeight * 0.11, 58, 92);
+    const step = Math.max(1, scroller.clientHeight - overlap);
+    const offsets = [0];
+
+    for (let top = step; top < max; top += step) offsets.push(Math.round(top));
+    if (max > 0) {
+      const last = offsets[offsets.length - 1];
+      if (max - last > 36) offsets.push(max);
+      else offsets[offsets.length - 1] = max;
+    }
+
+    state.pageOffsets = [...new Set(offsets.map((offset) => Math.max(0, Math.round(offset))))];
+    state.currentPage = clamp(state.currentPage, 0, state.pageOffsets.length - 1);
+  }
+
+  function nearestPageIndex(scrollTop) {
+    let nearest = 0;
+    let distance = Infinity;
+    state.pageOffsets.forEach((offset, index) => {
+      const nextDistance = Math.abs(offset - scrollTop);
+      if (nextDistance < distance) {
+        distance = nextDistance;
+        nearest = index;
+      }
+    });
+    return nearest;
+  }
+
+  function updatePageControls() {
+    const total = Math.max(1, state.pageOffsets.length);
+    const current = clamp(state.currentPage, 0, total - 1);
+    const counter = app.querySelector(".page-counter");
+    const previous = app.querySelector(".page-previous");
+    const next = app.querySelector(".page-next");
+    if (counter) counter.textContent = `${current + 1} / ${total}쪽`;
+    if (previous) previous.disabled = current === 0;
+    if (next) next.disabled = current === total - 1;
+  }
+
+  function turnToPage(index, { behavior = "smooth" } = {}) {
+    const scroller = app.querySelector(".article-scroll");
+    if (!scroller) return;
+    const targetPage = clamp(Number(index) || 0, 0, state.pageOffsets.length - 1);
+    const previousPage = state.currentPage;
+    state.currentPage = targetPage;
+    if (behavior === "smooth" && targetPage !== previousPage) {
+      window.clearTimeout(state.pageTurnTimer);
+      delete scroller.dataset.pageTurn;
+      void scroller.offsetWidth;
+      scroller.dataset.pageTurn = targetPage > previousPage ? "next" : "previous";
+      state.pageTurnTimer = window.setTimeout(() => {
+        delete scroller.dataset.pageTurn;
+      }, 260);
+    }
+    scroller.scrollTo({ top: state.pageOffsets[targetPage] || 0, behavior: "auto" });
+    updatePageControls();
+    window.setTimeout(() => {
+      updateReadingProgress();
+      updateActiveHeading();
+    }, behavior === "smooth" ? 260 : 0);
+  }
+
+  function turnPage(direction) {
+    turnToPage(state.currentPage + (direction < 0 ? -1 : 1));
+  }
+
+  function schedulePageLayout(progressRatio = currentReadingRatio()) {
+    if (!app.querySelector(".markdown-body")?.hasChildNodes()) return;
+    if (state.pageLayoutFrame) cancelAnimationFrame(state.pageLayoutFrame);
+    state.pageLayoutFrame = requestAnimationFrame(() => {
+      state.pageLayoutFrame = null;
+      calculatePages();
+      const scroller = app.querySelector(".article-scroll");
+      const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      state.currentPage = nearestPageIndex(clamp(Number(progressRatio) || 0, 0, 1) * max);
+      turnToPage(state.currentPage, { behavior: "auto" });
+    });
   }
 
   function updateReadingProgress() {

@@ -1,4 +1,4 @@
-const CACHE_NAME = "norm-law-reader-v4";
+const CACHE_NAME = "norm-law-reader-v5";
 const APP_SHELL = [
   "./",
   "./index.html",

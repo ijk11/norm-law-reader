@@ -28,6 +28,8 @@
   const preferences = readJson(STORAGE_KEY, {});
   const savedProgress = readJson(PROGRESS_KEY, {});
   const savedHighlights = readJson(HIGHLIGHTS_KEY, {});
+  const savedFontSize = Number(preferences.fontSize);
+  const readableFontSize = !Number.isFinite(savedFontSize) || savedFontSize <= 17.2 ? 19 : savedFontSize;
   const params = new URLSearchParams(location.search);
   const requestedId = params.get("doc");
   const defaultDoc = documents.find((doc) => doc.file.includes("수리모델에서의 법")) || documents[0];
@@ -42,7 +44,7 @@
     filter: "전체",
     theme: preferences.theme || "system",
     font: preferences.font || "serif",
-    fontSize: clamp(Number(preferences.fontSize) || 17.2, 16, 24),
+    fontSize: clamp(readableFontSize, 18, 30),
     leading: preferences.leading === "compact" ? "compact" : "relaxed",
     drawer: null,
     installPrompt: null,
@@ -156,7 +158,7 @@
         </section>
         <section class="setting-group">
           <label class="setting-label" for="font-size"><span>글자 크기</span><span class="setting-value font-size-value"></span></label>
-          <div class="range-row"><span>가</span><input id="font-size" type="range" min="16" max="24" step="1" /><span style="font-size:1.35rem">가</span></div>
+          <div class="range-row"><span>가</span><input id="font-size" type="range" min="18" max="30" step="1" /><span style="font-size:1.55rem">가</span></div>
         </section>
         <section class="setting-group">
           <div class="setting-label"><span>줄 간격</span></div>

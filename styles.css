@@ -16,7 +16,7 @@
   --quote-line: #6179b5;
   --code: #eff2f7;
   --shadow: 0 18px 50px rgba(30, 42, 70, 0.1);
-  --reader-size: 1.075rem;
+  --reader-size: 1.1875rem;
   --reader-leading: 1.86;
   --reader-font: "Iowan Old Style", "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", Batang, serif;
   --safe-top: env(safe-area-inset-top, 0px);
@@ -164,7 +164,7 @@ select:focus-visible,
   display: block;
   margin-top: 0.15rem;
   color: rgba(255, 255, 255, 0.58);
-  font-size: 0.77rem;
+  font-size: 0.84rem;
 }
 
 .library-close {
@@ -199,7 +199,7 @@ select:focus-visible,
   border-radius: 13px;
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
-  font-size: 0.92rem;
+  font-size: 1rem;
 }
 
 .search-input::placeholder {
@@ -251,7 +251,7 @@ select:focus-visible,
   border-radius: 999px;
   background: transparent;
   color: rgba(255, 255, 255, 0.66);
-  font-size: 0.78rem;
+  font-size: 0.86rem;
   cursor: pointer;
 }
 
@@ -268,7 +268,7 @@ select:focus-visible,
   justify-content: space-between;
   padding: 0.15rem 1.1rem 0.55rem;
   color: rgba(255, 255, 255, 0.52);
-  font-size: 0.76rem;
+  font-size: 0.84rem;
 }
 
 .doc-list {
@@ -283,7 +283,7 @@ select:focus-visible,
 .group-label {
   margin: 1rem 0.55rem 0.42rem;
   color: rgba(255, 255, 255, 0.45);
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -316,7 +316,7 @@ select:focus-visible,
   display: -webkit-box;
   overflow: hidden;
   color: rgba(255, 255, 255, 0.94);
-  font-size: 0.89rem;
+  font-size: 0.97rem;
   font-weight: 650;
   line-height: 1.45;
   letter-spacing: -0.015em;
@@ -330,7 +330,7 @@ select:focus-visible,
   gap: 0.42rem;
   margin-top: 0.38rem;
   color: rgba(255, 255, 255, 0.48);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
 }
 
 .doc-progress-track {
@@ -367,7 +367,7 @@ select:focus-visible,
   padding: 0.65rem 1.1rem calc(0.65rem + var(--safe-bottom));
   border-top: 1px solid rgba(255, 255, 255, 0.09);
   color: rgba(255, 255, 255, 0.48);
-  font-size: 0.74rem;
+  font-size: 0.8rem;
 }
 
 .offline-state {
@@ -434,7 +434,7 @@ select:focus-visible,
   display: block;
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-overflow: ellipsis;
@@ -447,7 +447,7 @@ select:focus-visible,
   max-width: 50vw;
   overflow: hidden;
   margin-top: 0.1rem;
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -493,7 +493,7 @@ select:focus-visible,
 .text-button {
   gap: 0.45rem;
   padding: 0 0.9rem;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -579,7 +579,7 @@ select:focus-visible,
   gap: 0.5rem;
   margin-bottom: 0.8rem;
   color: var(--accent);
-  font-size: 0.76rem;
+  font-size: 0.84rem;
   font-weight: 800;
   letter-spacing: 0.07em;
 }
@@ -609,7 +609,7 @@ select:focus-visible,
   gap: 0.55rem 1.1rem;
   margin-top: 1.15rem;
   color: var(--ink-soft);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
 }
 
 .article-submeta span {
@@ -681,7 +681,7 @@ select:focus-visible,
 .markdown-body h4 {
   margin: 2.3rem 0 0.8rem;
   color: var(--navy-2);
-  font-size: 1.12rem;
+  font-size: 1.18rem;
   line-height: 1.5;
 }
 
@@ -816,7 +816,7 @@ select:focus-visible,
   min-width: 520px;
   border-collapse: collapse;
   font-family: Inter, Pretendard, "Noto Sans KR", system-ui, sans-serif;
-  font-size: 0.86em;
+  font-size: 0.92em;
   line-height: 1.6;
 }
 
@@ -910,13 +910,13 @@ select:focus-visible,
 .pager-link small {
   margin-bottom: 0.25rem;
   color: var(--ink-soft);
-  font-size: 0.7rem;
+  font-size: 0.78rem;
 }
 
 .pager-link strong {
   display: -webkit-box;
   overflow: hidden;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -942,7 +942,7 @@ select:focus-visible,
   justify-content: space-between;
   margin: 0 0 0.8rem;
   color: var(--ink-soft);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -958,14 +958,14 @@ select:focus-visible,
   padding: 0.4rem 0.55rem;
   border-left: 2px solid transparent;
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: 0.86rem;
   line-height: 1.45;
   text-decoration: none;
 }
 
 .toc-link.level-3 {
   padding-left: 1rem;
-  font-size: 0.74rem;
+  font-size: 0.82rem;
 }
 
 .toc-link:hover,
@@ -1046,13 +1046,13 @@ select:focus-visible,
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.7rem;
-  font-size: 0.84rem;
+  font-size: 0.94rem;
   font-weight: 750;
 }
 
 .setting-value {
   color: var(--ink-soft);
-  font-size: 0.76rem;
+  font-size: 0.84rem;
   font-weight: 600;
 }
 
@@ -1076,7 +1076,7 @@ select:focus-visible,
   border-radius: 9px;
   background: transparent;
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   cursor: pointer;
 }
 
@@ -1110,7 +1110,7 @@ select:focus-visible,
   border-radius: 12px;
   background: var(--panel);
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   line-height: 1.55;
 }
 
@@ -1125,12 +1125,12 @@ select:focus-visible,
   align-items: center;
   border-left: 0;
   border-radius: 10px;
-  font-size: 0.88rem;
+  font-size: 0.94rem;
 }
 
 .mobile-toc .toc-link.level-3 {
   padding-left: 1.25rem;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
 }
 
 .toast {
@@ -1144,7 +1144,7 @@ select:focus-visible,
   border-radius: 12px;
   background: var(--ink);
   color: var(--paper);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   line-height: 1.5;
   box-shadow: var(--shadow);
   opacity: 0;
@@ -1217,11 +1217,11 @@ select:focus-visible,
 
   .toolbar-title strong {
     max-width: 52vw;
-    font-size: 0.82rem;
+    font-size: 0.9rem;
   }
 
   .toolbar-title span {
-    font-size: 0.65rem;
+    font-size: 0.75rem;
   }
 
   .toolbar-actions .settings-trigger,
@@ -1265,7 +1265,7 @@ select:focus-visible,
   }
 
   .article-submeta {
-    font-size: 0.76rem;
+    font-size: 0.84rem;
   }
 
   .markdown-body {
@@ -1311,7 +1311,7 @@ select:focus-visible,
     border-radius: 10px;
     background: transparent;
     color: var(--ink-soft);
-    font-size: 0.62rem;
+    font-size: 0.75rem;
     cursor: pointer;
   }
 

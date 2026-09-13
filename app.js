@@ -790,9 +790,12 @@
 
   function registerPwa() {
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-      navigator.serviceWorker.register("./sw.js").catch(() => {
-        showToast("오프라인 저장을 준비하지 못했습니다. 온라인 읽기는 계속 가능합니다.");
-      });
+      navigator.serviceWorker
+        .register("./sw.js", { updateViaCache: "none" })
+        .then((registration) => registration.update())
+        .catch(() => {
+          showToast("오프라인 저장을 준비하지 못했습니다. 온라인 읽기는 계속 가능합니다.");
+        });
     }
   }
 

@@ -546,6 +546,7 @@ select:focus-visible,
 }
 
 .reading-layout {
+  position: relative;
   display: grid;
   min-width: 0;
   min-height: 0;
@@ -567,6 +568,17 @@ select:focus-visible,
 
 .article-scroll::-webkit-scrollbar {
   display: none;
+}
+
+.page-edge-mask {
+  position: absolute;
+  z-index: 10;
+  right: 250px;
+  bottom: 58px;
+  left: 0;
+  height: 0;
+  background: var(--canvas);
+  pointer-events: none;
 }
 
 .article-scroll[data-page-turn="next"] {
@@ -1270,6 +1282,10 @@ select:focus-visible,
   .toc-panel {
     display: none;
   }
+
+  .page-edge-mask {
+    right: 0;
+  }
 }
 
 @media (max-width: 780px) {
@@ -1353,6 +1369,10 @@ select:focus-visible,
     min-height: 52px;
     gap: 0.35rem;
     padding: 0.3rem 0.6rem;
+  }
+
+  .page-edge-mask {
+    bottom: 52px;
   }
 
   .page-turn-button {
@@ -1499,6 +1519,7 @@ select:focus-visible,
   .library,
   .reader-toolbar,
   .toc-panel,
+  .page-edge-mask,
   .page-turner,
   .mobile-bottom-bar,
   .settings-panel,

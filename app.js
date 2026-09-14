@@ -52,6 +52,7 @@
     activeHeading: null,
     pendingHighlight: null,
     pageOffsets: [0],
+    pageMasks: [0],
     currentPage: 0,
     pageLayoutFrame: null,
     pageTurnTimer: null,
@@ -126,6 +127,7 @@
               <nav class="article-pager" aria-label="이전·다음 문서"></nav>
             </article>
           </section>
+          <div class="page-edge-mask" aria-hidden="true"></div>
           <nav class="page-turner" aria-label="책장 넘기기">
             <button class="page-turn-button page-previous" type="button" aria-label="이전 쪽">${icons.chevronLeft}<span>이전 쪽</span></button>
             <output class="page-counter" aria-live="polite" aria-atomic="true">1 / 1쪽</output>
@@ -181,7 +183,7 @@
         </section>
         <section class="setting-group">
           <div class="setting-label"><span>책장 넘기기</span><span class="setting-value">화살표 방식</span></div>
-          <p class="install-tip">아래의 좌우 화살표로 한 쪽씩 넘깁니다. 컴퓨터에서는 방향키·Page Up·Page Down과 마우스 휠도 사용할 수 있습니다. 쪽 끝의 몇 줄은 다음 쪽에 한 번 더 보여 문장이 끊겨도 놓치지 않게 했습니다.</p>
+          <p class="install-tip">아래의 좌우 화살표로 한 쪽씩 넘깁니다. 컴퓨터에서는 방향키·Page Up·Page Down과 마우스 휠도 사용할 수 있습니다. 마지막 줄이 중간에서 잘리지 않도록 실제 줄 경계에 맞춰 다음 쪽을 시작합니다.</p>
         </section>
         <section class="setting-group">
           <div class="setting-label"><span>형광펜</span><span class="setting-value highlight-summary">표시 없음</span></div>
@@ -300,8 +302,7 @@
       calculatePages();
       if (restorePosition) {
         const ratio = clamp(Number(savedProgress[doc.id]) || 0, 0, 1);
-        const target = ratio * Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-        state.currentPage = nearestPageIndex(target);
+        state.currentPage = Math.round(ratio * Math.max(0, state.pageOffsets.length - 1));
         scroller.scrollTop = state.pageOffsets[state.currentPage] || 0;
       } else {
         state.currentPage = 0;
@@ -808,29 +809,111 @@
   }
 
   function currentReadingRatio() {
-    const scroller = app.querySelector(".article-scroll");
-    if (!scroller) return 0;
-    const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    return max ? clamp(scroller.scrollTop / max, 0, 1) : 0;
+    const lastPage = Math.max(0, state.pageOffsets.length - 1);
+    return lastPage ? clamp(state.currentPage / lastPage, 0, 1) : 0;
   }
 
   function calculatePages() {
     const scroller = app.querySelector(".article-scroll");
     if (!scroller) return;
     const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    const overlap = clamp(scroller.clientHeight * 0.11, 58, 92);
-    const step = Math.max(1, scroller.clientHeight - overlap);
+    const pageHeight = scroller.clientHeight;
+    const lines = renderedLineBands(scroller);
     const offsets = [0];
+    const masks = [0];
 
-    for (let top = step; top < max; top += step) offsets.push(Math.round(top));
-    if (max > 0) {
-      const last = offsets[offsets.length - 1];
-      if (max - last > 36) offsets.push(max);
-      else offsets[offsets.length - 1] = max;
+    if (pageHeight < 1 || !lines.length) {
+      state.pageOffsets = offsets;
+      state.pageMasks = masks;
+      state.currentPage = 0;
+      return;
+    }
+
+    let pageTop = 0;
+    let lineIndex = 0;
+    let safety = 0;
+
+    while (pageTop < max && lineIndex < lines.length && safety < 10000) {
+      safety += 1;
+      const readableBottom = pageTop + pageHeight - 24;
+      let lastVisible = -1;
+
+      while (lineIndex < lines.length && lines[lineIndex].bottom <= pageTop + 1) lineIndex += 1;
+      for (let index = lineIndex; index < lines.length; index += 1) {
+        if (lines[index].bottom <= readableBottom) lastVisible = index;
+        else break;
+      }
+
+      if (lastVisible < lineIndex) {
+        const fallbackTop = Math.min(max, pageTop + Math.max(1, pageHeight - 64));
+        masks[masks.length - 1] = 48;
+        if (fallbackTop <= pageTop + 1) break;
+        offsets.push(Math.round(fallbackTop));
+        masks.push(0);
+        pageTop = fallbackTop;
+        continue;
+      }
+
+      const nextLine = lines[lastVisible + 1];
+      if (!nextLine) {
+        masks[masks.length - 1] = 0;
+        break;
+      }
+
+      const lastLine = lines[lastVisible];
+      const maskStart = Math.max(0, lastLine.bottom - pageTop + 2);
+      masks[masks.length - 1] = Math.max(0, Math.ceil(pageHeight - maskStart));
+
+      const nextTop = Math.min(max, Math.max(lastLine.bottom + 1, nextLine.top - 16));
+      if (nextTop <= pageTop + 1) break;
+      offsets.push(Math.round(nextTop));
+      masks.push(0);
+      pageTop = nextTop;
+      lineIndex = lastVisible + 1;
     }
 
     state.pageOffsets = [...new Set(offsets.map((offset) => Math.max(0, Math.round(offset))))];
+    state.pageMasks = masks.slice(0, state.pageOffsets.length);
+    while (state.pageMasks.length < state.pageOffsets.length) state.pageMasks.push(0);
     state.currentPage = clamp(state.currentPage, 0, state.pageOffsets.length - 1);
+  }
+
+  function renderedLineBands(scroller) {
+    const root = scroller.querySelector(".article-wrap");
+    if (!root) return [];
+    const scrollerRect = scroller.getBoundingClientRect();
+    const ranges = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    let node = walker.nextNode();
+
+    while (node) {
+      if (node.nodeValue?.trim()) {
+        range.selectNodeContents(node);
+        for (const rect of range.getClientRects()) {
+          if (rect.width < 0.5 || rect.height < 1) continue;
+          ranges.push({
+            top: rect.top - scrollerRect.top + scroller.scrollTop,
+            bottom: rect.bottom - scrollerRect.top + scroller.scrollTop
+          });
+        }
+      }
+      node = walker.nextNode();
+    }
+
+    range.detach?.();
+    ranges.sort((a, b) => a.top - b.top || a.bottom - b.bottom);
+    const bands = [];
+    ranges.forEach((item) => {
+      const previous = bands[bands.length - 1];
+      if (previous && item.top <= previous.bottom + 1 && item.bottom >= previous.top - 1) {
+        previous.top = Math.min(previous.top, item.top);
+        previous.bottom = Math.max(previous.bottom, item.bottom);
+      } else {
+        bands.push({ top: item.top, bottom: item.bottom });
+      }
+    });
+    return bands;
   }
 
   function nearestPageIndex(scrollTop) {
@@ -852,9 +935,11 @@
     const counter = app.querySelector(".page-counter");
     const previous = app.querySelector(".page-previous");
     const next = app.querySelector(".page-next");
+    const mask = app.querySelector(".page-edge-mask");
     if (counter) counter.textContent = `${current + 1} / ${total}쪽`;
     if (previous) previous.disabled = current === 0;
     if (next) next.disabled = current === total - 1;
+    if (mask) mask.style.height = `${state.pageMasks[current] || 0}px`;
   }
 
   function turnToPage(index, { behavior = "smooth" } = {}) {
@@ -890,17 +975,14 @@
     state.pageLayoutFrame = requestAnimationFrame(() => {
       state.pageLayoutFrame = null;
       calculatePages();
-      const scroller = app.querySelector(".article-scroll");
-      const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-      state.currentPage = nearestPageIndex(clamp(Number(progressRatio) || 0, 0, 1) * max);
+      state.currentPage = Math.round(clamp(Number(progressRatio) || 0, 0, 1) * Math.max(0, state.pageOffsets.length - 1));
       turnToPage(state.currentPage, { behavior: "auto" });
     });
   }
 
   function updateReadingProgress() {
-    const scroller = app.querySelector(".article-scroll");
-    const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    const ratio = max ? clamp(scroller.scrollTop / max, 0, 1) : 1;
+    const lastPage = Math.max(0, state.pageOffsets.length - 1);
+    const ratio = lastPage ? clamp(state.currentPage / lastPage, 0, 1) : 1;
     app.querySelector(".reader-progress").style.setProperty("--reading-progress", `${(ratio * 100).toFixed(2)}%`);
     savedProgress[state.currentId] = ratio;
     try {

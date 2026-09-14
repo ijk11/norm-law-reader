@@ -3,6 +3,9 @@
 
   const documents = Array.isArray(window.MD_DOCUMENTS) ? window.MD_DOCUMENTS : [];
   const genealogy = window.LAW_GENEALOGY || { eras: [], schools: [], lineages: [], debates: [], people: [], questions: [] };
+  const genealogySignatures = window.LAW_GENEALOGY_SIGNATURES || {};
+  const genealogySections = ["overview", "lineages", "eras", "debates", "people"];
+  const peoplePerPage = 9;
   const STORAGE_KEY = "norm-law-reader:v1";
   const PROGRESS_KEY = "norm-law-reader:progress:v1";
   const HIGHLIGHTS_KEY = "norm-law-reader:highlights:v1";
@@ -38,6 +41,11 @@
   const params = new URLSearchParams(location.search);
   const requestedId = params.get("doc");
   const requestedView = params.get("view") === "genealogy" ? "genealogy" : "reader";
+  const requestedGenealogySection = genealogySections.includes(params.get("section")) ? params.get("section") : "overview";
+  const requestedGenealogyPerson = genealogy.people.some((person) => person.id === params.get("person")) ? params.get("person") : null;
+  const requestedGenealogyPage = Math.max(1, Number.parseInt(params.get("page"), 10) || 1);
+  const requestedGenealogyEra = genealogy.eras.some((era) => era.id === params.get("era")) ? params.get("era") : "전체";
+  const requestedGenealogySchool = genealogy.schools.some((school) => school.id === params.get("school")) ? params.get("school") : "전체";
   const defaultDoc = documents.find((doc) => doc.file.includes("수리모델에서의 법")) || documents[0];
 
   const state = {
@@ -49,9 +57,12 @@
     view: requestedView,
     query: "",
     filter: "전체",
-    genealogyQuery: "",
-    genealogyEra: "전체",
-    genealogySchool: "전체",
+    genealogyQuery: params.get("q") || "",
+    genealogyEra: requestedGenealogyEra,
+    genealogySchool: requestedGenealogySchool,
+    genealogySection: requestedGenealogyPerson ? "people" : requestedGenealogySection,
+    genealogyPersonId: requestedGenealogyPerson,
+    genealogyPeoplePage: requestedGenealogyPage,
     theme: preferences.theme || "system",
     font: preferences.font || "serif",
     fontSize: clamp(readableFontSize, 18, 30),
@@ -250,71 +261,6 @@
     const view = app.querySelector(".genealogy-view");
     if (!view || !genealogy.people.length) return;
     const personById = new Map(genealogy.people.map((person) => [person.id, person]));
-
-    const lineageMarkup = genealogy.lineages
-      .map(
-        (lineage, lineageIndex) => `
-          <article class="lineage-track tone-${lineage.tone}">
-            <header class="lineage-head">
-              <span>${String(lineageIndex + 1).padStart(2, "0")}</span>
-              <div><h3>${escapeHtml(lineage.title)}</h3><p>${escapeHtml(lineage.question)}</p></div>
-            </header>
-            <div class="lineage-flow" aria-label="${escapeAttribute(lineage.title)} 영향 흐름">
-              ${lineage.steps
-                .map(
-                  (step, stepIndex) => `
-                    <div class="lineage-stage">
-                      <div class="lineage-node-group">
-                        ${step
-                          .map((id) => {
-                            const person = personById.get(id);
-                            return person
-                              ? `<button type="button" class="lineage-node" data-person-id="${escapeAttribute(id)}"><strong>${escapeHtml(person.name)}</strong><span>${escapeHtml(person.role)}</span></button>`
-                              : "";
-                          })
-                          .join("")}
-                      </div>
-                      ${stepIndex < lineage.steps.length - 1 ? `<span class="lineage-arrow" aria-hidden="true">${icons.arrow}</span>` : ""}
-                    </div>`
-                )
-                .join("")}
-            </div>
-          </article>`
-      )
-      .join("");
-
-    const eraMarkup = genealogy.eras
-      .map((era, index) => {
-        const people = genealogy.people.filter((person) => person.era === era.id);
-        return `
-          <article class="era-card">
-            <div class="era-marker"><span>${String(index + 1).padStart(2, "0")}</span><i></i></div>
-            <div class="era-card-body">
-              <div class="era-card-head"><div><p>${escapeHtml(era.range)}</p><h3>${escapeHtml(era.label)}</h3></div><span>${people.length}명</span></div>
-              <strong class="era-question">${escapeHtml(era.question)}</strong>
-              <p>${escapeHtml(era.summary)}</p>
-              <button type="button" class="era-people-link" data-era-filter="${escapeAttribute(era.id)}">${escapeHtml(people.slice(0, 5).map((person) => person.name).join(" · "))}${people.length > 5 ? " 외" : ""}${icons.arrow}</button>
-            </div>
-          </article>`;
-      })
-      .join("");
-
-    const debateMarkup = genealogy.debates
-      .map(
-        (debate, index) => `
-          <article class="debate-card">
-            <div class="debate-index"><span>${String(index + 1).padStart(2, "0")}</span><em>${escapeHtml(debate.era)}</em></div>
-            <h3>${escapeHtml(debate.issue)}</h3>
-            <div class="debate-sides">
-              <div><strong>${escapeHtml(debate.left)}</strong><p>${escapeHtml(debate.leftText)}</p></div>
-              <span class="versus">VS</span>
-              <div><strong>${escapeHtml(debate.right)}</strong><p>${escapeHtml(debate.rightText)}</p></div>
-            </div>
-            <p class="debate-relation">${escapeHtml(debate.relation)}</p>
-          </article>`
-      )
-      .join("");
-
     view.innerHTML = `
       <header class="genealogy-toolbar">
         <button class="icon-button mobile-menu" type="button" aria-label="탐색 메뉴 열기">${icons.menu}</button>
@@ -326,66 +272,108 @@
       </header>
       <div class="genealogy-scroll" tabindex="0">
         <div class="genealogy-inner">
-          <section class="genealogy-hero" id="overview">
-            <div class="genealogy-kicker"><span>${escapeHtml(genealogy.meta.scope)}</span><i></i><span>${genealogy.people.length}명 · ${genealogy.debates.length}개 대립축</span></div>
-            <div class="genealogy-title-row">
-              <div>
-                <h1>${escapeHtml(genealogy.meta.title)}</h1>
-                <p>${escapeHtml(genealogy.meta.description)}</p>
-              </div>
-              <div class="genealogy-compass" aria-hidden="true">${icons.balance}<span>법 · 정의 · 권력</span></div>
-            </div>
-            <div class="question-grid">
-              ${genealogy.questions
-                .map((question) => `<article><span>${question.number}</span><h2>${escapeHtml(question.title)}</h2><p>${escapeHtml(question.text)}</p></article>`)
-                .join("")}
-            </div>
-            <p class="genealogy-reading-note"><strong>표기 원칙</strong> 화살표는 영향·계승을 뜻합니다. ‘직접 논쟁’이라고 표시하지 않은 대립은 후대의 비판 또는 구조적 대비일 수 있습니다.</p>
-          </section>
-
-          <section class="genealogy-section" id="lineages">
-            <header class="section-heading"><div><span>02 · 큰 계보</span><h2>다섯 흐름을 먼저 잡기</h2></div><p>같은 인물이 여러 흐름에 나타나는 것은 법철학의 쟁점들이 서로 교차하기 때문입니다.</p></header>
-            <div class="lineage-board">${lineageMarkup}</div>
-          </section>
-
-          <section class="genealogy-section" id="eras">
-            <header class="section-heading"><div><span>03 · 시대별</span><h2>질문이 바뀐 순간들</h2></div><p>사상은 이전 시대를 지우지 않고, 새로운 국가·재판·사회 문제 위에서 질문을 다시 배열합니다.</p></header>
-            <div class="era-timeline">${eraMarkup}</div>
-          </section>
-
-          <section class="genealogy-section" id="debates">
-            <header class="section-heading"><div><span>04 · 대립구도</span><h2>논쟁으로 이해하는 법철학</h2></div><p>직접 충돌과 후대의 이론적 비판을 구분해, 각 논쟁이 무엇을 갈라놓았는지 압축했습니다.</p></header>
-            <div class="debate-grid">${debateMarkup}</div>
-          </section>
-
-          <section class="genealogy-section people-section" id="people">
-            <header class="section-heading"><div><span>05 · 인물별</span><h2>핵심 주장과 대표 저서</h2></div><p>시대·사조·이름으로 좁혀 각 인물의 자리와 관계를 비교할 수 있습니다.</p></header>
-            <div class="people-tools">
-              <label class="genealogy-search-wrap">${icons.search}<span class="sr-only">법철학자 검색</span><input class="genealogy-search" type="search" autocomplete="off" placeholder="인물·주장·저서·관계 검색" value="${escapeAttribute(state.genealogyQuery)}" /></label>
-              <div class="people-filter-block"><span>시대</span><div class="people-filter-row" data-filter-group="era"><button type="button" data-era-filter="전체" aria-pressed="true">전체</button>${genealogy.eras.map((era) => `<button type="button" data-era-filter="${escapeAttribute(era.id)}" aria-pressed="false">${escapeHtml(era.label)}</button>`).join("")}</div></div>
-              <div class="people-filter-block"><span>사조</span><div class="people-filter-row" data-filter-group="school"><button type="button" data-school-filter="전체" aria-pressed="true">전체</button>${genealogy.schools.map((school) => `<button type="button" data-school-filter="${escapeAttribute(school.id)}" aria-pressed="false">${escapeHtml(school.label)}</button>`).join("")}</div></div>
-            </div>
-            <div class="people-results-head"><strong class="people-result-count" aria-live="polite"></strong><button type="button" class="reset-genealogy-filters">필터 초기화</button></div>
-            <div class="people-grid"></div>
-          </section>
-
-          <footer class="genealogy-footer-note">
-            <strong>읽기의 범위</strong>
-            <p>법학 방법론과 정치철학을 함께 보여 주는 서양 중심의 입문 지도입니다. 인물 간 화살표는 동일한 학설의 단순 승계가 아니라 문제의식·방법·비판의 이동을 압축한 것입니다.</p>
-            <div><a href="https://plato.stanford.edu/entries/legal-positivism/" target="_blank" rel="noreferrer">법실증주의 참고</a><a href="https://plato.stanford.edu/entries/natural-law-theories/" target="_blank" rel="noreferrer">자연법론 참고</a><a href="https://iep.utm.edu/law-phil/" target="_blank" rel="noreferrer">법철학 개관</a></div>
-          </footer>
+          ${renderGenealogyStage(personById)}
+          ${state.genealogyPersonId ? "" : renderGenealogyPager()}
         </div>
       </div>
-      <nav class="genealogy-mobile-bar" aria-label="계보 빠른 이동">
-        <button class="bottom-button open-library" type="button">${icons.map}<span>탐색</span></button>
+      <nav class="genealogy-mobile-bar" aria-label="계보 화면 이동">
+        <button class="bottom-button" type="button" data-genealogy-section="overview">${icons.map}<span>관점</span></button>
         <button class="bottom-button" type="button" data-genealogy-section="lineages">${icons.arrow}<span>계보</span></button>
         <button class="bottom-button" type="button" data-genealogy-section="eras">${icons.clock}<span>시대</span></button>
         <button class="bottom-button" type="button" data-genealogy-section="debates">${icons.balance}<span>대립</span></button>
         <button class="bottom-button" type="button" data-genealogy-section="people">${icons.people}<span>인물</span></button>
         <button class="bottom-button toggle-theme" type="button">${icons.moon}<span>테마</span></button>
       </nav>`;
-    updateGenealogyResults();
+    updateGenealogyResults({ syncUrl: false });
+    updateGenealogyNavigation();
     updateThemeButtons();
+    if (state.installPrompt) app.querySelectorAll(".install-button").forEach((button) => { button.hidden = false; });
+    requestAnimationFrame(() => {
+      const scroller = app.querySelector(".genealogy-scroll");
+      if (scroller) scroller.scrollTop = 0;
+    });
+  }
+
+  function renderGenealogyStage(personById) {
+    if (state.genealogySection === "lineages") return renderLineagesStage(personById);
+    if (state.genealogySection === "eras") return renderErasStage();
+    if (state.genealogySection === "debates") return renderDebatesStage();
+    if (state.genealogySection === "people") return state.genealogyPersonId ? renderPersonProfile(state.genealogyPersonId) : renderPeopleStage();
+    return renderOverviewStage();
+  }
+
+  function renderOverviewStage() {
+    return `
+      <section class="genealogy-hero genealogy-stage" aria-labelledby="genealogy-overview-title">
+        <div class="genealogy-kicker"><span>${escapeHtml(genealogy.meta.scope)}</span><i></i><span>${genealogy.people.length}명 · ${genealogy.debates.length}개 대립축</span></div>
+        <div class="genealogy-title-row">
+          <div><h1 id="genealogy-overview-title">${escapeHtml(genealogy.meta.title)}</h1><p>${escapeHtml(genealogy.meta.description)}</p></div>
+          <div class="genealogy-compass" aria-hidden="true">${icons.balance}<span>법 · 정의 · 권력</span></div>
+        </div>
+        <div class="question-grid">${genealogy.questions.map((question) => `<article><span>${question.number}</span><h2>${escapeHtml(question.title)}</h2><p>${escapeHtml(question.text)}</p></article>`).join("")}</div>
+        <div class="genealogy-entry-actions">
+          <button type="button" data-genealogy-section="lineages"><span>계보부터 읽기</span>${icons.arrow}</button>
+          <button type="button" data-genealogy-section="people"><span>인물 찾아보기</span>${icons.people}</button>
+        </div>
+        <p class="genealogy-reading-note"><strong>표기 원칙</strong> 화살표는 영향·계승을 뜻합니다. ‘직접 논쟁’이라고 표시하지 않은 대립은 후대의 비판 또는 구조적 대비일 수 있습니다.</p>
+      </section>
+      <footer class="genealogy-footer-note compact">
+        <strong>읽기의 범위</strong>
+        <p>법학 방법론과 정치철학을 함께 보여 주는 서양 중심의 입문 지도입니다. 시그니처 문장은 널리 알려진 번역을 간결하게 다듬었고, 개념은 등장한 논쟁 맥락과 함께 제시합니다.</p>
+        <div><a href="https://plato.stanford.edu/entries/lawphil-nature/" target="_blank" rel="noreferrer">법의 본성</a><a href="https://plato.stanford.edu/entries/legal-positivism/" target="_blank" rel="noreferrer">법실증주의</a><a href="https://plato.stanford.edu/entries/natural-law-theories/" target="_blank" rel="noreferrer">자연법론</a><a href="https://iep.utm.edu/law-phil/" target="_blank" rel="noreferrer">법철학 개관</a></div>
+      </footer>`;
+  }
+
+  function renderLineagesStage(personById) {
+    const markup = genealogy.lineages.map((lineage, lineageIndex) => `
+      <article class="lineage-track tone-${lineage.tone}">
+        <header class="lineage-head"><span>${String(lineageIndex + 1).padStart(2, "0")}</span><div><h3>${escapeHtml(lineage.title)}</h3><p>${escapeHtml(lineage.question)}</p></div></header>
+        <div class="lineage-flow" aria-label="${escapeAttribute(lineage.title)} 영향 흐름">
+          ${lineage.steps.map((step, stepIndex) => `
+            <div class="lineage-stage"><div class="lineage-node-group">${step.map((id) => {
+              const person = personById.get(id);
+              return person ? `<button type="button" class="lineage-node" data-person-id="${escapeAttribute(id)}"><strong>${escapeHtml(person.name)}</strong><span>${escapeHtml(person.role)}</span></button>` : "";
+            }).join("")}</div>${stepIndex < lineage.steps.length - 1 ? `<span class="lineage-arrow" aria-hidden="true">${icons.arrow}</span>` : ""}</div>`).join("")}
+        </div>
+      </article>`).join("");
+    return `<section class="genealogy-section genealogy-stage" aria-labelledby="lineages-title"><header class="section-heading"><div><span>02 · 큰 계보</span><h2 id="lineages-title">다섯 흐름을 먼저 잡기</h2></div><p>인물을 선택하면 시그니처 개념과 맥락을 포함한 상세 화면으로 이동합니다.</p></header><div class="lineage-board">${markup}</div></section>`;
+  }
+
+  function renderErasStage() {
+    const markup = genealogy.eras.map((era, index) => {
+      const people = genealogy.people.filter((person) => person.era === era.id);
+      return `<article class="era-card"><div class="era-marker"><span>${String(index + 1).padStart(2, "0")}</span><i></i></div><div class="era-card-body"><div class="era-card-head"><div><p>${escapeHtml(era.range)}</p><h3>${escapeHtml(era.label)}</h3></div><span>${people.length}명</span></div><strong class="era-question">${escapeHtml(era.question)}</strong><p>${escapeHtml(era.summary)}</p><button type="button" class="era-people-link" data-era-filter="${escapeAttribute(era.id)}">${escapeHtml(people.slice(0, 5).map((person) => person.name).join(" · "))}${people.length > 5 ? " 외" : ""}${icons.arrow}</button></div></article>`;
+    }).join("");
+    return `<section class="genealogy-section genealogy-stage" aria-labelledby="eras-title"><header class="section-heading"><div><span>03 · 시대별</span><h2 id="eras-title">질문이 바뀐 순간들</h2></div><p>사상은 이전 시대를 지우지 않고 새로운 국가·재판·사회 문제 위에서 질문을 다시 배열합니다.</p></header><div class="era-timeline">${markup}</div></section>`;
+  }
+
+  function renderDebatesStage() {
+    const markup = genealogy.debates.map((debate, index) => `<article class="debate-card"><div class="debate-index"><span>${String(index + 1).padStart(2, "0")}</span><em>${escapeHtml(debate.era)}</em></div><h3>${escapeHtml(debate.issue)}</h3><div class="debate-sides"><div><strong>${escapeHtml(debate.left)}</strong><p>${escapeHtml(debate.leftText)}</p></div><span class="versus">VS</span><div><strong>${escapeHtml(debate.right)}</strong><p>${escapeHtml(debate.rightText)}</p></div></div><p class="debate-relation">${escapeHtml(debate.relation)}</p></article>`).join("");
+    return `<section class="genealogy-section genealogy-stage" aria-labelledby="debates-title"><header class="section-heading"><div><span>04 · 대립구도</span><h2 id="debates-title">논쟁으로 이해하는 법철학</h2></div><p>직접 충돌과 후대의 이론적 비판을 구분해 각 논쟁이 무엇을 갈라놓았는지 압축했습니다.</p></header><div class="debate-grid">${markup}</div></section>`;
+  }
+
+  function renderPeopleStage() {
+    return `<section class="genealogy-section genealogy-stage people-section" aria-labelledby="people-title"><header class="section-heading"><div><span>05 · 인물별</span><h2 id="people-title">문장과 개념으로 기억하기</h2></div><p>한 쪽에 아홉 명씩 살펴보고, 인물을 열어 핵심 주장·저서·관계를 함께 읽을 수 있습니다.</p></header><div class="people-tools"><label class="genealogy-search-wrap">${icons.search}<span class="sr-only">법철학자 검색</span><input class="genealogy-search" type="search" autocomplete="off" placeholder="인물·개념·주장·저서·관계 검색" value="${escapeAttribute(state.genealogyQuery)}" /></label><div class="people-filter-block"><span>시대</span><div class="people-filter-row" data-filter-group="era"><button type="button" data-era-filter="전체" aria-pressed="true">전체</button>${genealogy.eras.map((era) => `<button type="button" data-era-filter="${escapeAttribute(era.id)}" aria-pressed="false">${escapeHtml(era.label)}</button>`).join("")}</div></div><div class="people-filter-block"><span>사조</span><div class="people-filter-row" data-filter-group="school"><button type="button" data-school-filter="전체" aria-pressed="true">전체</button>${genealogy.schools.map((school) => `<button type="button" data-school-filter="${escapeAttribute(school.id)}" aria-pressed="false">${escapeHtml(school.label)}</button>`).join("")}</div></div></div><div class="people-results-head"><strong class="people-result-count" aria-live="polite"></strong><button type="button" class="reset-genealogy-filters">필터 초기화</button></div><div class="people-grid"></div><nav class="people-pagination" aria-label="인물 목록 쪽 이동"></nav></section>`;
+  }
+
+  function renderPersonProfile(id) {
+    const person = genealogy.people.find((item) => item.id === id);
+    if (!person) return renderPeopleStage();
+    const signature = genealogySignatures[person.id];
+    const era = genealogy.eras.find((item) => item.id === person.era);
+    const schools = person.schools.map((schoolId) => genealogy.schools.find((item) => item.id === schoolId)).filter(Boolean);
+    const index = genealogy.people.indexOf(person);
+    const previous = genealogy.people[index - 1];
+    const next = genealogy.people[index + 1];
+    return `<section class="person-profile genealogy-stage" aria-labelledby="person-profile-title"><button type="button" class="person-profile-back" data-people-list>${icons.chevronLeft}<span>인물 목록으로</span></button><article class="person-profile-card"><header class="person-profile-head"><div><span class="person-era">${escapeHtml(era?.label || "")}</span><h1 id="person-profile-title">${escapeHtml(person.name)}</h1><p>${escapeHtml(person.original)} · ${escapeHtml(person.years)}</p><div class="person-schools">${schools.map((school) => `<span>${escapeHtml(school.label)}</span>`).join("")}</div></div><span class="person-number">${String(index + 1).padStart(2, "0")} / ${genealogy.people.length}</span></header>${signature ? `<div class="signature-feature"><span>${escapeHtml(signature.kind)}</span><blockquote>${escapeHtml(signature.text)}</blockquote><p><strong>어떤 맥락인가</strong>${escapeHtml(signature.context)}</p></div>` : ""}<div class="person-profile-grid"><section><span>핵심 주장</span><strong>${escapeHtml(person.role)}</strong><p>${escapeHtml(person.claim)}</p></section><section><span>대표 저서</span><ul>${person.works.map((work) => `<li>${escapeHtml(work)}</li>`).join("")}</ul></section></div><section class="person-profile-relations"><span>관계와 논쟁</span><div>${person.relations.map((relation) => `<p class="relation-${relationTone(relation)}">${escapeHtml(relation)}</p>`).join("")}</div></section></article><nav class="person-neighbors" aria-label="앞뒤 인물">${previous ? `<button type="button" data-person-id="${escapeAttribute(previous.id)}">${icons.chevronLeft}<span><small>이전 인물</small><strong>${escapeHtml(previous.name)}</strong></span></button>` : `<span></span>`}${next ? `<button type="button" data-person-id="${escapeAttribute(next.id)}"><span><small>다음 인물</small><strong>${escapeHtml(next.name)}</strong></span>${icons.chevronRight}</button>` : `<span></span>`}</nav></section>`;
+  }
+
+  function renderGenealogyPager() {
+    const labels = ["관점", "큰 계보", "시대", "대립", "인물"];
+    const index = Math.max(0, genealogySections.indexOf(state.genealogySection));
+    const previous = genealogySections[index - 1];
+    const next = genealogySections[index + 1];
+    return `<nav class="genealogy-pager" aria-label="계보 앞뒤 화면"><div>${previous ? `<button type="button" data-genealogy-section="${previous}">${icons.chevronLeft}<span><small>이전</small><strong>${labels[index - 1]}</strong></span></button>` : ""}</div><output>${String(index + 1).padStart(2, "0")} / ${String(genealogySections.length).padStart(2, "0")}</output><div>${next ? `<button type="button" data-genealogy-section="${next}"><span><small>다음</small><strong>${labels[index + 1]}</strong></span>${icons.chevronRight}</button>` : ""}</div></nav>`;
   }
 
   function filteredGenealogyPeople() {
@@ -393,7 +381,8 @@
     return genealogy.people.filter((person) => {
       const eraMatches = state.genealogyEra === "전체" || person.era === state.genealogyEra;
       const schoolMatches = state.genealogySchool === "전체" || person.schools.includes(state.genealogySchool);
-      const searchable = `${person.name} ${person.original} ${person.role} ${person.claim} ${person.works.join(" ")} ${person.relations.join(" ")}`;
+      const signature = genealogySignatures[person.id];
+      const searchable = `${person.name} ${person.original} ${person.role} ${person.claim} ${person.works.join(" ")} ${person.relations.join(" ")} ${signature?.text || ""} ${signature?.context || ""}`;
       return eraMatches && schoolMatches && (!query || normalizeSearch(searchable).includes(query));
     });
   }
@@ -404,14 +393,13 @@
       .map((person) => {
         const era = genealogy.eras.find((item) => item.id === person.era);
         const schools = person.schools.map((id) => genealogy.schools.find((item) => item.id === id)).filter(Boolean);
+        const signature = genealogySignatures[person.id];
         return `
-          <article class="person-card" id="person-${escapeAttribute(person.id)}" tabindex="-1">
+          <article class="person-card" id="person-${escapeAttribute(person.id)}">
             <div class="person-card-top"><div><span class="person-era">${escapeHtml(era?.label || "")}</span><h3>${escapeHtml(person.name)}</h3><p>${escapeHtml(person.original)} · ${escapeHtml(person.years)}</p></div><span class="person-number">${String(genealogy.people.indexOf(person) + 1).padStart(2, "0")}</span></div>
             <div class="person-schools">${schools.map((school) => `<span>${escapeHtml(school.label)}</span>`).join("")}</div>
-            <strong class="person-role">${escapeHtml(person.role)}</strong>
-            <p class="person-claim">${escapeHtml(person.claim)}</p>
-            <div class="person-detail"><span>대표 저서</span><ul>${person.works.map((work) => `<li>${escapeHtml(work)}</li>`).join("")}</ul></div>
-            <div class="person-relations">${person.relations.map((relation) => `<span class="relation-${relationTone(relation)}">${escapeHtml(relation)}</span>`).join("")}</div>
+            ${signature ? `<div class="person-signature"><span>${escapeHtml(signature.kind)}</span><strong>${escapeHtml(signature.text)}</strong><p>${escapeHtml(signature.context)}</p></div>` : `<strong class="person-role">${escapeHtml(person.role)}</strong><p class="person-claim">${escapeHtml(person.claim)}</p>`}
+            <button type="button" class="person-open" data-person-id="${escapeAttribute(person.id)}"><span>상세 읽기</span>${icons.arrow}</button>
           </article>`;
       })
       .join("");
@@ -423,17 +411,75 @@
     return "influence";
   }
 
-  function updateGenealogyResults() {
+  function updateGenealogyResults({ syncUrl = true } = {}) {
     const grid = app.querySelector(".people-grid");
     if (!grid) return;
     const people = filteredGenealogyPeople();
-    grid.innerHTML = renderPersonCards(people);
+    const totalPages = Math.max(1, Math.ceil(people.length / peoplePerPage));
+    state.genealogyPeoplePage = Math.min(state.genealogyPeoplePage, totalPages);
+    const start = (state.genealogyPeoplePage - 1) * peoplePerPage;
+    const visiblePeople = people.slice(start, start + peoplePerPage);
+    grid.innerHTML = renderPersonCards(visiblePeople);
     const count = app.querySelector(".people-result-count");
-    if (count) count.textContent = `${people.length}명 표시`;
+    if (count) count.textContent = people.length ? `${people.length}명 중 ${start + 1}–${Math.min(start + peoplePerPage, people.length)}명 · ${state.genealogyPeoplePage}/${totalPages}쪽` : "0명 표시";
+    const pagination = app.querySelector(".people-pagination");
+    if (pagination) pagination.innerHTML = renderPeoplePagination(totalPages);
     app.querySelectorAll("[data-era-filter]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.eraFilter === state.genealogyEra)));
     app.querySelectorAll("[data-school-filter]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.schoolFilter === state.genealogySchool)));
     const reset = app.querySelector(".reset-genealogy-filters");
     if (reset) reset.hidden = state.genealogyEra === "전체" && state.genealogySchool === "전체" && !state.genealogyQuery;
+    if (syncUrl && state.view === "genealogy") writeGenealogyHistory({ replaceHistory: true });
+  }
+
+  function renderPeoplePagination(totalPages) {
+    if (totalPages <= 1) return "";
+    const pages = Array.from({ length: totalPages }, (_, index) => index + 1);
+    return `<button type="button" data-people-page="${state.genealogyPeoplePage - 1}" aria-label="이전 인물 쪽" ${state.genealogyPeoplePage === 1 ? "disabled" : ""}>${icons.chevronLeft}</button><div>${pages.map((page) => `<button type="button" data-people-page="${page}" aria-current="${page === state.genealogyPeoplePage ? "page" : "false"}">${page}</button>`).join("")}</div><button type="button" data-people-page="${state.genealogyPeoplePage + 1}" aria-label="다음 인물 쪽" ${state.genealogyPeoplePage === totalPages ? "disabled" : ""}>${icons.chevronRight}</button>`;
+  }
+
+  function updateGenealogyNavigation() {
+    app.querySelectorAll("[data-genealogy-section]").forEach((button) => {
+      const active = button.dataset.genealogySection === state.genealogySection;
+      button.setAttribute("aria-current", active ? "page" : "false");
+    });
+  }
+
+  function genealogyUrl() {
+    const url = new URL(location.href);
+    url.searchParams.set("view", "genealogy");
+    if (state.genealogySection === "overview") url.searchParams.delete("section");
+    else url.searchParams.set("section", state.genealogySection);
+    if (state.genealogyPersonId) url.searchParams.set("person", state.genealogyPersonId);
+    else url.searchParams.delete("person");
+    if (state.genealogySection === "people" && state.genealogyPeoplePage > 1) url.searchParams.set("page", String(state.genealogyPeoplePage));
+    else url.searchParams.delete("page");
+    if (state.genealogySection === "people" && state.genealogyQuery) url.searchParams.set("q", state.genealogyQuery);
+    else url.searchParams.delete("q");
+    if (state.genealogySection === "people" && state.genealogyEra !== "전체") url.searchParams.set("era", state.genealogyEra);
+    else url.searchParams.delete("era");
+    if (state.genealogySection === "people" && state.genealogySchool !== "전체") url.searchParams.set("school", state.genealogySchool);
+    else url.searchParams.delete("school");
+    return url;
+  }
+
+  function writeGenealogyHistory({ replaceHistory = false } = {}) {
+    const historyState = { docId: state.currentId, view: "genealogy", section: state.genealogySection, personId: state.genealogyPersonId, page: state.genealogyPeoplePage };
+    history[replaceHistory ? "replaceState" : "pushState"](historyState, "", genealogyUrl());
+  }
+
+  function navigateGenealogy(section, { personId = null, page = 1, replaceHistory = false, skipHistory = false } = {}) {
+    state.genealogySection = genealogySections.includes(section) ? section : "overview";
+    state.genealogyPersonId = state.genealogySection === "people" && genealogy.people.some((person) => person.id === personId) ? personId : null;
+    state.genealogyPeoplePage = Math.max(1, Number.parseInt(page, 10) || 1);
+    renderGenealogy();
+    if (!skipHistory) writeGenealogyHistory({ replaceHistory });
+    document.title = state.genealogyPersonId ? `${genealogy.people.find((person) => person.id === state.genealogyPersonId)?.name} · 법철학의 계보` : "법철학의 계보 · 규범과 법";
+    closeDrawers();
+  }
+
+  function focusGenealogyPerson(id) {
+    if (!genealogy.people.some((person) => person.id === id)) return;
+    navigateGenealogy("people", { personId: id, page: state.genealogyPeoplePage });
   }
 
   function setView(view, { replaceHistory = false, skipHistory = false } = {}) {
@@ -446,35 +492,16 @@
     documentsPane?.setAttribute("aria-hidden", String(state.view !== "reader"));
     const context = app.querySelector(".brand-context");
     if (context) context.textContent = state.view === "genealogy" ? "법철학 지식 지도" : "연구 문서함";
-    const url = new URL(location.href);
-    if (state.view === "genealogy") url.searchParams.set("view", "genealogy");
-    else url.searchParams.delete("view");
-    if (!skipHistory) history[replaceHistory ? "replaceState" : "pushState"]({ docId: state.currentId, view: state.view }, "", url);
-    document.title = state.view === "genealogy" ? "법철학의 계보 · 규범과 법" : `${currentDocument()?.title || "규범과 법"} · 규범과 법`;
+    const url = state.view === "genealogy" ? genealogyUrl() : new URL(location.href);
+    if (state.view === "reader") {
+      ["view", "section", "person", "page", "q", "era", "school"].forEach((key) => url.searchParams.delete(key));
+    }
+    if (!skipHistory) history[replaceHistory ? "replaceState" : "pushState"]({ docId: state.currentId, view: state.view, section: state.genealogySection, personId: state.genealogyPersonId, page: state.genealogyPeoplePage }, "", url);
+    const activePerson = genealogy.people.find((person) => person.id === state.genealogyPersonId);
+    document.title = state.view === "genealogy" ? activePerson ? `${activePerson.name} · 법철학의 계보` : "법철학의 계보 · 규범과 법" : `${currentDocument()?.title || "규범과 법"} · 규범과 법`;
     savePreferences();
     closeDrawers();
     if (state.view === "reader") requestAnimationFrame(() => schedulePageLayout(currentReadingRatio()));
-  }
-
-  function scrollToGenealogySection(id) {
-    const section = app.querySelector(`#${cssEscape(id)}`);
-    const scroller = app.querySelector(".genealogy-scroll");
-    if (!section || !scroller) return;
-    scroller.scrollTo({ top: Math.max(0, section.offsetTop - 18), behavior: "smooth" });
-    closeDrawers();
-  }
-
-  function focusGenealogyPerson(id) {
-    const person = genealogy.people.find((item) => item.id === id);
-    if (!person) return;
-    state.genealogyQuery = person.name;
-    state.genealogyEra = "전체";
-    state.genealogySchool = "전체";
-    const search = app.querySelector(".genealogy-search");
-    if (search) search.value = person.name;
-    updateGenealogyResults();
-    scrollToGenealogySection("people");
-    requestAnimationFrame(() => app.querySelector(`#person-${cssEscape(id)}`)?.focus({ preventScroll: true }));
   }
 
   function renderLibrary() {
@@ -566,6 +593,7 @@
     updateHighlightControls();
 
     const url = new URL(location.href);
+    if (state.view === "reader") ["view", "section", "person", "page", "q", "era", "school"].forEach((key) => url.searchParams.delete(key));
     url.searchParams.set("doc", doc.id);
     history[replaceHistory ? "replaceState" : "pushState"]({ docId: doc.id, view: state.view }, "", url);
 
@@ -669,6 +697,7 @@
     app.addEventListener("input", (event) => {
       if (!event.target.matches(".genealogy-search")) return;
       state.genealogyQuery = event.target.value.trim();
+      state.genealogyPeoplePage = 1;
       updateGenealogyResults();
     });
 
@@ -687,22 +716,37 @@
 
       const genealogySection = event.target.closest("[data-genealogy-section]");
       if (genealogySection) {
-        scrollToGenealogySection(genealogySection.dataset.genealogySection);
+        navigateGenealogy(genealogySection.dataset.genealogySection);
         return;
       }
 
       const eraFilter = event.target.closest("[data-era-filter]");
       if (eraFilter) {
         state.genealogyEra = eraFilter.dataset.eraFilter;
-        updateGenealogyResults();
-        if (eraFilter.closest(".era-card")) scrollToGenealogySection("people");
+        state.genealogyPeoplePage = 1;
+        if (eraFilter.closest(".era-card")) navigateGenealogy("people");
+        else updateGenealogyResults();
         return;
       }
 
       const schoolFilter = event.target.closest("[data-school-filter]");
       if (schoolFilter) {
         state.genealogySchool = schoolFilter.dataset.schoolFilter;
+        state.genealogyPeoplePage = 1;
         updateGenealogyResults();
+        return;
+      }
+
+      const peoplePage = event.target.closest("[data-people-page]");
+      if (peoplePage && !peoplePage.disabled) {
+        state.genealogyPeoplePage = Math.max(1, Number.parseInt(peoplePage.dataset.peoplePage, 10) || 1);
+        renderGenealogy();
+        writeGenealogyHistory();
+        return;
+      }
+
+      if (event.target.closest("[data-people-list]")) {
+        navigateGenealogy("people", { page: state.genealogyPeoplePage });
         return;
       }
 
@@ -710,6 +754,7 @@
         state.genealogyQuery = "";
         state.genealogyEra = "전체";
         state.genealogySchool = "전체";
+        state.genealogyPeoplePage = 1;
         const genealogySearch = app.querySelector(".genealogy-search");
         if (genealogySearch) genealogySearch.value = "";
         updateGenealogyResults();
@@ -841,7 +886,16 @@
       const nextView = event.state?.view || (nextParams.get("view") === "genealogy" ? "genealogy" : "reader");
       if (nextView !== state.view) setView(nextView, { skipHistory: true });
       const id = event.state?.docId || nextParams.get("doc");
-      if (nextView === "reader" && id && id !== state.currentId) selectDocument(id, { restorePosition: true, replaceHistory: true });
+      if (nextView === "genealogy") {
+        const nextSection = genealogySections.includes(nextParams.get("section")) ? nextParams.get("section") : "overview";
+        const nextPerson = genealogy.people.some((person) => person.id === nextParams.get("person")) ? nextParams.get("person") : null;
+        state.genealogyQuery = nextParams.get("q") || "";
+        state.genealogyEra = genealogy.eras.some((era) => era.id === nextParams.get("era")) ? nextParams.get("era") : "전체";
+        state.genealogySchool = genealogy.schools.some((school) => school.id === nextParams.get("school")) ? nextParams.get("school") : "전체";
+        navigateGenealogy(nextPerson ? "people" : nextSection, { personId: nextPerson, page: nextParams.get("page") || 1, skipHistory: true });
+      } else if (id && id !== state.currentId) {
+        selectDocument(id, { restorePosition: true, replaceHistory: true });
+      }
     });
 
     window.addEventListener("online", updateOnlineState);

@@ -2,6 +2,7 @@
   "use strict";
 
   const documents = Array.isArray(window.MD_DOCUMENTS) ? window.MD_DOCUMENTS : [];
+  const genealogy = window.LAW_GENEALOGY || { eras: [], schools: [], lineages: [], debates: [], people: [], questions: [] };
   const STORAGE_KEY = "norm-law-reader:v1";
   const PROGRESS_KEY = "norm-law-reader:progress:v1";
   const HIGHLIGHTS_KEY = "norm-law-reader:highlights:v1";
@@ -22,7 +23,11 @@
     top: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 6-6 6 6M12 8v11"/></svg>',
     chevronLeft: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>',
     chevronRight: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
-    highlighter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.5 4.5 4 4L10 18H6v-4l9.5-9.5Z"/><path d="m13.5 6.5 4 4M4 21h16"/></svg>'
+    highlighter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.5 4.5 4 4L10 18H6v-4l9.5-9.5Z"/><path d="m13.5 6.5 4 4M4 21h16"/></svg>',
+    map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 6 5-2.5 7 2.5 5-2.5v14l-5 2.5-7-2.5-5 2.5V6Z"/><path d="M8.5 3.5v14M15.5 6v14"/></svg>',
+    people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.5-3.4 2.3-5 5.5-5s5 1.6 5.5 5"/><circle cx="17.5" cy="9" r="2.2"/><path d="M15.5 14.5c3.1-.7 5 .7 5.5 3.5"/></svg>',
+    balance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v17M6 20h12M5 6h14M7 6l-4 7h8L7 6Zm10 0-4 7h8l-4-7Z"/></svg>',
+    arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M14 7l5 5-5 5"/></svg>'
   };
 
   const preferences = readJson(STORAGE_KEY, {});
@@ -32,6 +37,7 @@
   const readableFontSize = !Number.isFinite(savedFontSize) || savedFontSize <= 17.2 ? 19 : savedFontSize;
   const params = new URLSearchParams(location.search);
   const requestedId = params.get("doc");
+  const requestedView = params.get("view") === "genealogy" ? "genealogy" : "reader";
   const defaultDoc = documents.find((doc) => doc.file.includes("수리모델에서의 법")) || documents[0];
 
   const state = {
@@ -40,8 +46,12 @@
       : documents.some((doc) => doc.id === preferences.lastDoc)
         ? preferences.lastDoc
         : defaultDoc?.id,
+    view: requestedView,
     query: "",
     filter: "전체",
+    genealogyQuery: "",
+    genealogyEra: "전체",
+    genealogySchool: "전체",
     theme: preferences.theme || "system",
     font: preferences.font || "serif",
     fontSize: clamp(readableFontSize, 18, 30),
@@ -73,6 +83,8 @@
   applyPreferences();
   renderLibrary();
   renderDocument({ restorePosition: true, replaceHistory: true });
+  renderGenealogy();
+  setView(state.view, { replaceHistory: true });
   bindGlobalEvents();
   registerPwa();
 
@@ -83,25 +95,54 @@
           <span class="brand-mark">${icons.book}</span>
           <div class="brand-copy">
             <strong>규범과 법</strong>
-            <span>연구 문서함</span>
+            <span class="brand-context">연구 문서함</span>
           </div>
           <button class="icon-button library-close" type="button" aria-label="문서함 닫기">${icons.close}</button>
         </div>
-        <div class="library-tools">
-          <label class="search-wrap">
-            <span class="sr-only">문서 검색</span>
-            ${icons.search}
-            <input class="search-input" type="search" autocomplete="off" placeholder="제목·저자·본문 검색" />
-            <button class="search-clear" type="button" aria-label="검색어 지우기" hidden>${icons.close}</button>
-          </label>
-          <div class="filter-row" aria-label="연구선 필터"></div>
+        <nav class="primary-tabs" aria-label="자료 유형">
+          <button class="primary-tab" type="button" data-app-view="reader" aria-selected="true">${icons.book}<span>연구 문서</span></button>
+          <button class="primary-tab" type="button" data-app-view="genealogy" aria-selected="false">${icons.map}<span>법철학 계보</span></button>
+        </nav>
+        <div class="library-pane documents-pane">
+          <div class="library-tools">
+            <label class="search-wrap">
+              <span class="sr-only">문서 검색</span>
+              ${icons.search}
+              <input class="search-input" type="search" autocomplete="off" placeholder="제목·저자·본문 검색" />
+              <button class="search-clear" type="button" aria-label="검색어 지우기" hidden>${icons.close}</button>
+            </label>
+            <div class="filter-row" aria-label="연구선 필터"></div>
+          </div>
+          <div class="library-summary" aria-live="polite"></div>
+          <nav class="doc-list" aria-label="Markdown 문서 목록"></nav>
+          <footer class="library-footer">
+            <span>${documents.length}편 수록</span>
+            <span class="offline-state" data-online="${navigator.onLine}">${navigator.onLine ? "동기화됨" : "오프라인"}</span>
+          </footer>
         </div>
-        <div class="library-summary" aria-live="polite"></div>
-        <nav class="doc-list" aria-label="Markdown 문서 목록"></nav>
-        <footer class="library-footer">
-          <span>${documents.length}편 수록</span>
-          <span class="offline-state" data-online="${navigator.onLine}">${navigator.onLine ? "동기화됨" : "오프라인"}</span>
-        </footer>
+        <div class="library-pane genealogy-pane" aria-hidden="true">
+          <div class="genealogy-sidebar-summary">
+            <strong>고대에서 현대까지</strong>
+            <span>${genealogy.lineages.length}개 계보 · ${genealogy.eras.length}개 시대 · ${genealogy.people.length}명</span>
+          </div>
+          <nav class="genealogy-sidebar-nav" aria-label="계보 섹션">
+            <button type="button" data-genealogy-section="overview"><span>01</span>관점</button>
+            <button type="button" data-genealogy-section="lineages"><span>02</span>큰 계보</button>
+            <button type="button" data-genealogy-section="eras"><span>03</span>시대</button>
+            <button type="button" data-genealogy-section="debates"><span>04</span>대립</button>
+            <button type="button" data-genealogy-section="people"><span>05</span>인물</button>
+          </nav>
+          <div class="relation-legend" aria-label="관계 표기 설명">
+            <p>관계 읽는 법</p>
+            <span><i class="legend-line mentor"></i>사제·학파</span>
+            <span><i class="legend-line influence"></i>영향·계승</span>
+            <span><i class="legend-line conflict"></i>비판·충돌</span>
+          </div>
+          <footer class="library-footer">
+            <span>서양 법철학 중심</span>
+            <span class="offline-state" data-online="${navigator.onLine}">${navigator.onLine ? "동기화됨" : "오프라인"}</span>
+          </footer>
+        </div>
       </aside>
       <main class="reader">
         <div class="reader-progress" aria-hidden="true"></div>
@@ -147,6 +188,7 @@
           <button class="bottom-button settings-trigger" type="button">${icons.settings}<span>설정</span></button>
           <button class="bottom-button scroll-top" type="button">${icons.top}<span>첫 쪽</span></button>
         </nav>
+        <section class="genealogy-view" aria-label="법철학 계보"></section>
       </main>
       <button class="drawer-backdrop" type="button" aria-label="패널 닫기"></button>
       <aside class="settings-panel" aria-label="읽기 설정" aria-hidden="true">
@@ -202,6 +244,237 @@
       </aside>
       <div class="toast" role="status" aria-live="polite"></div>
     `;
+  }
+
+  function renderGenealogy() {
+    const view = app.querySelector(".genealogy-view");
+    if (!view || !genealogy.people.length) return;
+    const personById = new Map(genealogy.people.map((person) => [person.id, person]));
+
+    const lineageMarkup = genealogy.lineages
+      .map(
+        (lineage, lineageIndex) => `
+          <article class="lineage-track tone-${lineage.tone}">
+            <header class="lineage-head">
+              <span>${String(lineageIndex + 1).padStart(2, "0")}</span>
+              <div><h3>${escapeHtml(lineage.title)}</h3><p>${escapeHtml(lineage.question)}</p></div>
+            </header>
+            <div class="lineage-flow" aria-label="${escapeAttribute(lineage.title)} 영향 흐름">
+              ${lineage.steps
+                .map(
+                  (step, stepIndex) => `
+                    <div class="lineage-stage">
+                      <div class="lineage-node-group">
+                        ${step
+                          .map((id) => {
+                            const person = personById.get(id);
+                            return person
+                              ? `<button type="button" class="lineage-node" data-person-id="${escapeAttribute(id)}"><strong>${escapeHtml(person.name)}</strong><span>${escapeHtml(person.role)}</span></button>`
+                              : "";
+                          })
+                          .join("")}
+                      </div>
+                      ${stepIndex < lineage.steps.length - 1 ? `<span class="lineage-arrow" aria-hidden="true">${icons.arrow}</span>` : ""}
+                    </div>`
+                )
+                .join("")}
+            </div>
+          </article>`
+      )
+      .join("");
+
+    const eraMarkup = genealogy.eras
+      .map((era, index) => {
+        const people = genealogy.people.filter((person) => person.era === era.id);
+        return `
+          <article class="era-card">
+            <div class="era-marker"><span>${String(index + 1).padStart(2, "0")}</span><i></i></div>
+            <div class="era-card-body">
+              <div class="era-card-head"><div><p>${escapeHtml(era.range)}</p><h3>${escapeHtml(era.label)}</h3></div><span>${people.length}명</span></div>
+              <strong class="era-question">${escapeHtml(era.question)}</strong>
+              <p>${escapeHtml(era.summary)}</p>
+              <button type="button" class="era-people-link" data-era-filter="${escapeAttribute(era.id)}">${escapeHtml(people.slice(0, 5).map((person) => person.name).join(" · "))}${people.length > 5 ? " 외" : ""}${icons.arrow}</button>
+            </div>
+          </article>`;
+      })
+      .join("");
+
+    const debateMarkup = genealogy.debates
+      .map(
+        (debate, index) => `
+          <article class="debate-card">
+            <div class="debate-index"><span>${String(index + 1).padStart(2, "0")}</span><em>${escapeHtml(debate.era)}</em></div>
+            <h3>${escapeHtml(debate.issue)}</h3>
+            <div class="debate-sides">
+              <div><strong>${escapeHtml(debate.left)}</strong><p>${escapeHtml(debate.leftText)}</p></div>
+              <span class="versus">VS</span>
+              <div><strong>${escapeHtml(debate.right)}</strong><p>${escapeHtml(debate.rightText)}</p></div>
+            </div>
+            <p class="debate-relation">${escapeHtml(debate.relation)}</p>
+          </article>`
+      )
+      .join("");
+
+    view.innerHTML = `
+      <header class="genealogy-toolbar">
+        <button class="icon-button mobile-menu" type="button" aria-label="탐색 메뉴 열기">${icons.menu}</button>
+        <div class="toolbar-title"><span>지식 지도</span><strong>${escapeHtml(genealogy.meta.title)}</strong></div>
+        <div class="toolbar-actions">
+          <button class="text-button install-button" type="button" hidden>${icons.download}<span class="button-label">앱 설치</span></button>
+          <button class="icon-button theme-trigger" type="button" aria-label="화면 테마 전환">${icons.moon}</button>
+        </div>
+      </header>
+      <div class="genealogy-scroll" tabindex="0">
+        <div class="genealogy-inner">
+          <section class="genealogy-hero" id="overview">
+            <div class="genealogy-kicker"><span>${escapeHtml(genealogy.meta.scope)}</span><i></i><span>${genealogy.people.length}명 · ${genealogy.debates.length}개 대립축</span></div>
+            <div class="genealogy-title-row">
+              <div>
+                <h1>${escapeHtml(genealogy.meta.title)}</h1>
+                <p>${escapeHtml(genealogy.meta.description)}</p>
+              </div>
+              <div class="genealogy-compass" aria-hidden="true">${icons.balance}<span>법 · 정의 · 권력</span></div>
+            </div>
+            <div class="question-grid">
+              ${genealogy.questions
+                .map((question) => `<article><span>${question.number}</span><h2>${escapeHtml(question.title)}</h2><p>${escapeHtml(question.text)}</p></article>`)
+                .join("")}
+            </div>
+            <p class="genealogy-reading-note"><strong>표기 원칙</strong> 화살표는 영향·계승을 뜻합니다. ‘직접 논쟁’이라고 표시하지 않은 대립은 후대의 비판 또는 구조적 대비일 수 있습니다.</p>
+          </section>
+
+          <section class="genealogy-section" id="lineages">
+            <header class="section-heading"><div><span>02 · 큰 계보</span><h2>다섯 흐름을 먼저 잡기</h2></div><p>같은 인물이 여러 흐름에 나타나는 것은 법철학의 쟁점들이 서로 교차하기 때문입니다.</p></header>
+            <div class="lineage-board">${lineageMarkup}</div>
+          </section>
+
+          <section class="genealogy-section" id="eras">
+            <header class="section-heading"><div><span>03 · 시대별</span><h2>질문이 바뀐 순간들</h2></div><p>사상은 이전 시대를 지우지 않고, 새로운 국가·재판·사회 문제 위에서 질문을 다시 배열합니다.</p></header>
+            <div class="era-timeline">${eraMarkup}</div>
+          </section>
+
+          <section class="genealogy-section" id="debates">
+            <header class="section-heading"><div><span>04 · 대립구도</span><h2>논쟁으로 이해하는 법철학</h2></div><p>직접 충돌과 후대의 이론적 비판을 구분해, 각 논쟁이 무엇을 갈라놓았는지 압축했습니다.</p></header>
+            <div class="debate-grid">${debateMarkup}</div>
+          </section>
+
+          <section class="genealogy-section people-section" id="people">
+            <header class="section-heading"><div><span>05 · 인물별</span><h2>핵심 주장과 대표 저서</h2></div><p>시대·사조·이름으로 좁혀 각 인물의 자리와 관계를 비교할 수 있습니다.</p></header>
+            <div class="people-tools">
+              <label class="genealogy-search-wrap">${icons.search}<span class="sr-only">법철학자 검색</span><input class="genealogy-search" type="search" autocomplete="off" placeholder="인물·주장·저서·관계 검색" value="${escapeAttribute(state.genealogyQuery)}" /></label>
+              <div class="people-filter-block"><span>시대</span><div class="people-filter-row" data-filter-group="era"><button type="button" data-era-filter="전체" aria-pressed="true">전체</button>${genealogy.eras.map((era) => `<button type="button" data-era-filter="${escapeAttribute(era.id)}" aria-pressed="false">${escapeHtml(era.label)}</button>`).join("")}</div></div>
+              <div class="people-filter-block"><span>사조</span><div class="people-filter-row" data-filter-group="school"><button type="button" data-school-filter="전체" aria-pressed="true">전체</button>${genealogy.schools.map((school) => `<button type="button" data-school-filter="${escapeAttribute(school.id)}" aria-pressed="false">${escapeHtml(school.label)}</button>`).join("")}</div></div>
+            </div>
+            <div class="people-results-head"><strong class="people-result-count" aria-live="polite"></strong><button type="button" class="reset-genealogy-filters">필터 초기화</button></div>
+            <div class="people-grid"></div>
+          </section>
+
+          <footer class="genealogy-footer-note">
+            <strong>읽기의 범위</strong>
+            <p>법학 방법론과 정치철학을 함께 보여 주는 서양 중심의 입문 지도입니다. 인물 간 화살표는 동일한 학설의 단순 승계가 아니라 문제의식·방법·비판의 이동을 압축한 것입니다.</p>
+            <div><a href="https://plato.stanford.edu/entries/legal-positivism/" target="_blank" rel="noreferrer">법실증주의 참고</a><a href="https://plato.stanford.edu/entries/natural-law-theories/" target="_blank" rel="noreferrer">자연법론 참고</a><a href="https://iep.utm.edu/law-phil/" target="_blank" rel="noreferrer">법철학 개관</a></div>
+          </footer>
+        </div>
+      </div>
+      <nav class="genealogy-mobile-bar" aria-label="계보 빠른 이동">
+        <button class="bottom-button open-library" type="button">${icons.map}<span>탐색</span></button>
+        <button class="bottom-button" type="button" data-genealogy-section="lineages">${icons.arrow}<span>계보</span></button>
+        <button class="bottom-button" type="button" data-genealogy-section="eras">${icons.clock}<span>시대</span></button>
+        <button class="bottom-button" type="button" data-genealogy-section="debates">${icons.balance}<span>대립</span></button>
+        <button class="bottom-button" type="button" data-genealogy-section="people">${icons.people}<span>인물</span></button>
+        <button class="bottom-button toggle-theme" type="button">${icons.moon}<span>테마</span></button>
+      </nav>`;
+    updateGenealogyResults();
+    updateThemeButtons();
+  }
+
+  function filteredGenealogyPeople() {
+    const query = normalizeSearch(state.genealogyQuery);
+    return genealogy.people.filter((person) => {
+      const eraMatches = state.genealogyEra === "전체" || person.era === state.genealogyEra;
+      const schoolMatches = state.genealogySchool === "전체" || person.schools.includes(state.genealogySchool);
+      const searchable = `${person.name} ${person.original} ${person.role} ${person.claim} ${person.works.join(" ")} ${person.relations.join(" ")}`;
+      return eraMatches && schoolMatches && (!query || normalizeSearch(searchable).includes(query));
+    });
+  }
+
+  function renderPersonCards(people) {
+    if (!people.length) return '<div class="empty-people"><strong>일치하는 인물이 없습니다.</strong><span>검색어를 줄이거나 시대·사조 필터를 초기화해 보세요.</span></div>';
+    return people
+      .map((person) => {
+        const era = genealogy.eras.find((item) => item.id === person.era);
+        const schools = person.schools.map((id) => genealogy.schools.find((item) => item.id === id)).filter(Boolean);
+        return `
+          <article class="person-card" id="person-${escapeAttribute(person.id)}" tabindex="-1">
+            <div class="person-card-top"><div><span class="person-era">${escapeHtml(era?.label || "")}</span><h3>${escapeHtml(person.name)}</h3><p>${escapeHtml(person.original)} · ${escapeHtml(person.years)}</p></div><span class="person-number">${String(genealogy.people.indexOf(person) + 1).padStart(2, "0")}</span></div>
+            <div class="person-schools">${schools.map((school) => `<span>${escapeHtml(school.label)}</span>`).join("")}</div>
+            <strong class="person-role">${escapeHtml(person.role)}</strong>
+            <p class="person-claim">${escapeHtml(person.claim)}</p>
+            <div class="person-detail"><span>대표 저서</span><ul>${person.works.map((work) => `<li>${escapeHtml(work)}</li>`).join("")}</ul></div>
+            <div class="person-relations">${person.relations.map((relation) => `<span class="relation-${relationTone(relation)}">${escapeHtml(relation)}</span>`).join("")}</div>
+          </article>`;
+      })
+      .join("");
+  }
+
+  function relationTone(relation) {
+    if (/사제|지도|학파/.test(relation)) return "mentor";
+    if (/논쟁|비판|대립|쟁점|차이|주의/.test(relation)) return "conflict";
+    return "influence";
+  }
+
+  function updateGenealogyResults() {
+    const grid = app.querySelector(".people-grid");
+    if (!grid) return;
+    const people = filteredGenealogyPeople();
+    grid.innerHTML = renderPersonCards(people);
+    const count = app.querySelector(".people-result-count");
+    if (count) count.textContent = `${people.length}명 표시`;
+    app.querySelectorAll("[data-era-filter]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.eraFilter === state.genealogyEra)));
+    app.querySelectorAll("[data-school-filter]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.schoolFilter === state.genealogySchool)));
+    const reset = app.querySelector(".reset-genealogy-filters");
+    if (reset) reset.hidden = state.genealogyEra === "전체" && state.genealogySchool === "전체" && !state.genealogyQuery;
+  }
+
+  function setView(view, { replaceHistory = false, skipHistory = false } = {}) {
+    state.view = view === "genealogy" ? "genealogy" : "reader";
+    app.dataset.view = state.view;
+    app.querySelectorAll(".primary-tab[data-app-view]").forEach((button) => button.setAttribute("aria-selected", String(button.dataset.appView === state.view)));
+    const genealogyPane = app.querySelector(".genealogy-pane");
+    const documentsPane = app.querySelector(".documents-pane");
+    genealogyPane?.setAttribute("aria-hidden", String(state.view !== "genealogy"));
+    documentsPane?.setAttribute("aria-hidden", String(state.view !== "reader"));
+    const context = app.querySelector(".brand-context");
+    if (context) context.textContent = state.view === "genealogy" ? "법철학 지식 지도" : "연구 문서함";
+    const url = new URL(location.href);
+    if (state.view === "genealogy") url.searchParams.set("view", "genealogy");
+    else url.searchParams.delete("view");
+    if (!skipHistory) history[replaceHistory ? "replaceState" : "pushState"]({ docId: state.currentId, view: state.view }, "", url);
+    document.title = state.view === "genealogy" ? "법철학의 계보 · 규범과 법" : `${currentDocument()?.title || "규범과 법"} · 규범과 법`;
+    savePreferences();
+    closeDrawers();
+    if (state.view === "reader") requestAnimationFrame(() => schedulePageLayout(currentReadingRatio()));
+  }
+
+  function scrollToGenealogySection(id) {
+    const section = app.querySelector(`#${cssEscape(id)}`);
+    const scroller = app.querySelector(".genealogy-scroll");
+    if (!section || !scroller) return;
+    scroller.scrollTo({ top: Math.max(0, section.offsetTop - 18), behavior: "smooth" });
+    closeDrawers();
+  }
+
+  function focusGenealogyPerson(id) {
+    const person = genealogy.people.find((item) => item.id === id);
+    if (!person) return;
+    state.genealogyQuery = person.name;
+    state.genealogyEra = "전체";
+    state.genealogySchool = "전체";
+    const search = app.querySelector(".genealogy-search");
+    if (search) search.value = person.name;
+    updateGenealogyResults();
+    scrollToGenealogySection("people");
+    requestAnimationFrame(() => app.querySelector(`#person-${cssEscape(id)}`)?.focus({ preventScroll: true }));
   }
 
   function renderLibrary() {
@@ -263,7 +536,7 @@
 
     const toolbarTitle = app.querySelector(".toolbar-title strong");
     toolbarTitle.textContent = doc.title;
-    document.title = `${doc.title} · 규범과 법`;
+    if (state.view === "reader") document.title = `${doc.title} · 규범과 법`;
 
     const header = app.querySelector(".article-header");
     const readingMinutes = Math.max(1, Math.round((Number(doc.words) || 1) / 330));
@@ -294,7 +567,7 @@
 
     const url = new URL(location.href);
     url.searchParams.set("doc", doc.id);
-    history[replaceHistory ? "replaceState" : "pushState"]({ docId: doc.id }, "", url);
+    history[replaceHistory ? "replaceState" : "pushState"]({ docId: doc.id, view: state.view }, "", url);
 
     const scroller = app.querySelector(".article-scroll");
     requestAnimationFrame(() => {
@@ -368,6 +641,7 @@
 
   function selectDocument(id, { restorePosition = true, replaceHistory = false } = {}) {
     if (!documents.some((doc) => doc.id === id)) return;
+    if (state.view !== "reader") setView("reader", { skipHistory: true });
     state.currentId = id;
     renderDocument({ restorePosition, replaceHistory });
     closeDrawers();
@@ -392,7 +666,56 @@
       renderLibrary();
     });
 
+    app.addEventListener("input", (event) => {
+      if (!event.target.matches(".genealogy-search")) return;
+      state.genealogyQuery = event.target.value.trim();
+      updateGenealogyResults();
+    });
+
     app.addEventListener("click", (event) => {
+      const viewTab = event.target.closest("[data-app-view]");
+      if (viewTab) {
+        setView(viewTab.dataset.appView);
+        return;
+      }
+
+      const genealogyPerson = event.target.closest("[data-person-id]");
+      if (genealogyPerson) {
+        focusGenealogyPerson(genealogyPerson.dataset.personId);
+        return;
+      }
+
+      const genealogySection = event.target.closest("[data-genealogy-section]");
+      if (genealogySection) {
+        scrollToGenealogySection(genealogySection.dataset.genealogySection);
+        return;
+      }
+
+      const eraFilter = event.target.closest("[data-era-filter]");
+      if (eraFilter) {
+        state.genealogyEra = eraFilter.dataset.eraFilter;
+        updateGenealogyResults();
+        if (eraFilter.closest(".era-card")) scrollToGenealogySection("people");
+        return;
+      }
+
+      const schoolFilter = event.target.closest("[data-school-filter]");
+      if (schoolFilter) {
+        state.genealogySchool = schoolFilter.dataset.schoolFilter;
+        updateGenealogyResults();
+        return;
+      }
+
+      if (event.target.closest(".reset-genealogy-filters")) {
+        state.genealogyQuery = "";
+        state.genealogyEra = "전체";
+        state.genealogySchool = "전체";
+        const genealogySearch = app.querySelector(".genealogy-search");
+        if (genealogySearch) genealogySearch.value = "";
+        updateGenealogyResults();
+        return;
+      }
+
       const highlightButton = event.target.closest(".highlight-trigger");
       if (highlightButton) {
         addHighlightFromSelection();
@@ -514,8 +837,11 @@
     document.fonts?.ready.then(() => schedulePageLayout(currentReadingRatio()));
 
     window.addEventListener("popstate", (event) => {
-      const id = event.state?.docId || new URLSearchParams(location.search).get("doc");
-      if (id && id !== state.currentId) selectDocument(id, { restorePosition: true, replaceHistory: true });
+      const nextParams = new URLSearchParams(location.search);
+      const nextView = event.state?.view || (nextParams.get("view") === "genealogy" ? "genealogy" : "reader");
+      if (nextView !== state.view) setView(nextView, { skipHistory: true });
+      const id = event.state?.docId || nextParams.get("doc");
+      if (nextView === "reader" && id && id !== state.currentId) selectDocument(id, { restorePosition: true, replaceHistory: true });
     });
 
     window.addEventListener("online", updateOnlineState);
@@ -523,11 +849,15 @@
     window.addEventListener("beforeinstallprompt", (event) => {
       event.preventDefault();
       state.installPrompt = event;
-      app.querySelector(".install-button").hidden = false;
+      app.querySelectorAll(".install-button").forEach((button) => {
+        button.hidden = false;
+      });
     });
     window.addEventListener("appinstalled", () => {
       state.installPrompt = null;
-      app.querySelector(".install-button").hidden = true;
+      app.querySelectorAll(".install-button").forEach((button) => {
+        button.hidden = true;
+      });
       showToast("홈 화면에 설치했습니다.");
     });
 
@@ -542,7 +872,7 @@
       if (event.key === "/" && !typing) {
         event.preventDefault();
         if (innerWidth <= 780) openDrawer("library");
-        requestAnimationFrame(() => searchInput.focus());
+        requestAnimationFrame(() => (state.view === "genealogy" ? app.querySelector(".genealogy-search") : searchInput)?.focus());
       }
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLocaleLowerCase("en") === "h" && !typing) {
         event.preventDefault();
@@ -965,7 +1295,9 @@
       state.installPrompt.prompt();
       await state.installPrompt.userChoice;
       state.installPrompt = null;
-      app.querySelector(".install-button").hidden = true;
+      app.querySelectorAll(".install-button").forEach((button) => {
+        button.hidden = true;
+      });
       return;
     }
     const isiOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -973,9 +1305,10 @@
   }
 
   function updateOnlineState() {
-    const badge = app.querySelector(".offline-state");
-    badge.dataset.online = String(navigator.onLine);
-    badge.textContent = navigator.onLine ? "동기화됨" : "오프라인";
+    app.querySelectorAll(".offline-state").forEach((badge) => {
+      badge.dataset.online = String(navigator.onLine);
+      badge.textContent = navigator.onLine ? "동기화됨" : "오프라인";
+    });
   }
 
   function registerPwa() {

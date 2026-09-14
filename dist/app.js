@@ -52,7 +52,6 @@
     activeHeading: null,
     pendingHighlight: null,
     pageOffsets: [0],
-    pageMasks: [0],
     currentPage: 0,
     pageLayoutFrame: null,
     pageTurnTimer: null,
@@ -126,8 +125,8 @@
               <div class="markdown-body"></div>
               <nav class="article-pager" aria-label="이전·다음 문서"></nav>
             </article>
+            <div class="page-scroll-spacer" aria-hidden="true"></div>
           </section>
-          <div class="page-edge-mask" aria-hidden="true"></div>
           <nav class="page-turner" aria-label="책장 넘기기">
             <button class="page-turn-button page-previous" type="button" aria-label="이전 쪽">${icons.chevronLeft}<span>이전 쪽</span></button>
             <output class="page-counter" aria-live="polite" aria-atomic="true">1 / 1쪽</output>
@@ -303,11 +302,12 @@
       if (restorePosition) {
         const ratio = clamp(Number(savedProgress[doc.id]) || 0, 0, 1);
         state.currentPage = Math.round(ratio * Math.max(0, state.pageOffsets.length - 1));
-        scroller.scrollTop = state.pageOffsets[state.currentPage] || 0;
+        scroller.scrollLeft = state.pageOffsets[state.currentPage] || 0;
       } else {
         state.currentPage = 0;
-        scroller.scrollTop = 0;
+        scroller.scrollLeft = 0;
       }
+      scroller.scrollTop = 0;
       updatePageControls();
       updateReadingProgress();
       updateActiveHeading();
@@ -423,7 +423,7 @@
         event.preventDefault();
         const heading = document.getElementById(tocLink.dataset.headingId);
         if (heading) {
-          const target = scroller.scrollTop + heading.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+          const target = scroller.scrollLeft + heading.getBoundingClientRect().left - scroller.getBoundingClientRect().left;
           turnToPage(nearestPageIndex(target));
         }
         closeDrawers();
@@ -633,6 +633,7 @@
       return;
     }
 
+    const progressRatio = currentReadingRatio();
     const current = validHighlightsForDocument(state.currentId, bodyText);
     const overlapping = current.filter((item) => pending.start <= item.end && pending.end >= item.start);
     const start = Math.min(pending.start, ...overlapping.map((item) => item.start));
@@ -649,10 +650,12 @@
     state.pendingHighlight = null;
     window.getSelection()?.removeAllRanges();
     updateHighlightControls();
+    schedulePageLayout(progressRatio);
     if (stored) showToast("형광펜을 저장했습니다.");
   }
 
   function removeHighlight(id) {
+    const progressRatio = currentReadingRatio();
     const current = Array.isArray(savedHighlights[state.currentId]) ? savedHighlights[state.currentId] : [];
     const next = current.filter((item) => item.id !== id);
     if (next.length === current.length) return;
@@ -660,6 +663,7 @@
     const stored = saveHighlights();
     restoreHighlights(app.querySelector(".markdown-body"));
     updateHighlightControls();
+    schedulePageLayout(progressRatio);
     if (stored) showToast("형광펜을 지웠습니다.");
   }
 
@@ -816,104 +820,21 @@
   function calculatePages() {
     const scroller = app.querySelector(".article-scroll");
     if (!scroller) return;
-    const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    const pageHeight = scroller.clientHeight;
-    const lines = renderedLineBands(scroller);
-    const offsets = [0];
-    const masks = [0];
-
-    if (pageHeight < 1 || !lines.length) {
-      state.pageOffsets = offsets;
-      state.pageMasks = masks;
-      state.currentPage = 0;
-      return;
-    }
-
-    let pageTop = 0;
-    let lineIndex = 0;
-    let safety = 0;
-
-    while (pageTop < max && lineIndex < lines.length && safety < 10000) {
-      safety += 1;
-      const readableBottom = pageTop + pageHeight - 24;
-      let lastVisible = -1;
-
-      while (lineIndex < lines.length && lines[lineIndex].bottom <= pageTop + 1) lineIndex += 1;
-      for (let index = lineIndex; index < lines.length; index += 1) {
-        if (lines[index].bottom <= readableBottom) lastVisible = index;
-        else break;
-      }
-
-      if (lastVisible < lineIndex) {
-        const fallbackTop = Math.min(max, pageTop + Math.max(1, pageHeight - 64));
-        masks[masks.length - 1] = 48;
-        if (fallbackTop <= pageTop + 1) break;
-        offsets.push(Math.round(fallbackTop));
-        masks.push(0);
-        pageTop = fallbackTop;
-        continue;
-      }
-
-      const nextLine = lines[lastVisible + 1];
-      if (!nextLine) {
-        masks[masks.length - 1] = 0;
-        break;
-      }
-
-      const lastLine = lines[lastVisible];
-      const maskStart = Math.max(0, lastLine.bottom - pageTop + 2);
-      masks[masks.length - 1] = Math.max(0, Math.ceil(pageHeight - maskStart));
-
-      const nextTop = Math.min(max, Math.max(lastLine.bottom + 1, nextLine.top - 16));
-      if (nextTop <= pageTop + 1) break;
-      offsets.push(Math.round(nextTop));
-      masks.push(0);
-      pageTop = nextTop;
-      lineIndex = lastVisible + 1;
-    }
-
-    state.pageOffsets = [...new Set(offsets.map((offset) => Math.max(0, Math.round(offset))))];
-    state.pageMasks = masks.slice(0, state.pageOffsets.length);
-    while (state.pageMasks.length < state.pageOffsets.length) state.pageMasks.push(0);
-    state.currentPage = clamp(state.currentPage, 0, state.pageOffsets.length - 1);
-  }
-
-  function renderedLineBands(scroller) {
     const root = scroller.querySelector(".article-wrap");
-    if (!root) return [];
-    const scrollerRect = scroller.getBoundingClientRect();
-    const ranges = [];
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    const range = document.createRange();
-    let node = walker.nextNode();
+    const spacer = app.querySelector(".page-scroll-spacer");
+    if (!root || !spacer || scroller.clientWidth < 1) return;
 
-    while (node) {
-      if (node.nodeValue?.trim()) {
-        range.selectNodeContents(node);
-        for (const rect of range.getClientRects()) {
-          if (rect.width < 0.5 || rect.height < 1) continue;
-          ranges.push({
-            top: rect.top - scrollerRect.top + scroller.scrollTop,
-            bottom: rect.bottom - scrollerRect.top + scroller.scrollTop
-          });
-        }
-      }
-      node = walker.nextNode();
-    }
+    scroller.scrollLeft = 0;
+    spacer.style.left = "0px";
+    const pageWidth = scroller.clientWidth;
+    const columnWidth = root.offsetWidth;
+    root.style.columnGap = `${Math.max(0, pageWidth - columnWidth)}px`;
+    void root.offsetWidth;
 
-    range.detach?.();
-    ranges.sort((a, b) => a.top - b.top || a.bottom - b.bottom);
-    const bands = [];
-    ranges.forEach((item) => {
-      const previous = bands[bands.length - 1];
-      if (previous && item.top <= previous.bottom + 1 && item.bottom >= previous.top - 1) {
-        previous.top = Math.min(previous.top, item.top);
-        previous.bottom = Math.max(previous.bottom, item.bottom);
-      } else {
-        bands.push({ top: item.top, bottom: item.bottom });
-      }
-    });
-    return bands;
+    const total = Math.max(1, Math.ceil((scroller.scrollWidth - 0.5) / pageWidth));
+    spacer.style.left = `${total * pageWidth - 1}px`;
+    state.pageOffsets = Array.from({ length: total }, (_, index) => index * pageWidth);
+    state.currentPage = clamp(state.currentPage, 0, state.pageOffsets.length - 1);
   }
 
   function nearestPageIndex(scrollTop) {
@@ -935,11 +856,9 @@
     const counter = app.querySelector(".page-counter");
     const previous = app.querySelector(".page-previous");
     const next = app.querySelector(".page-next");
-    const mask = app.querySelector(".page-edge-mask");
     if (counter) counter.textContent = `${current + 1} / ${total}쪽`;
     if (previous) previous.disabled = current === 0;
     if (next) next.disabled = current === total - 1;
-    if (mask) mask.style.height = `${state.pageMasks[current] || 0}px`;
   }
 
   function turnToPage(index, { behavior = "smooth" } = {}) {
@@ -957,7 +876,7 @@
         delete scroller.dataset.pageTurn;
       }, 260);
     }
-    scroller.scrollTo({ top: state.pageOffsets[targetPage] || 0, behavior: "auto" });
+    scroller.scrollTo({ left: state.pageOffsets[targetPage] || 0, top: 0, behavior: "auto" });
     updatePageControls();
     window.setTimeout(() => {
       updateReadingProgress();
@@ -999,11 +918,15 @@
     const scroller = app.querySelector(".article-scroll");
     const headings = [...app.querySelectorAll(".markdown-body h2, .markdown-body h3")];
     if (!headings.length) return;
+    const scrollerLeft = scroller.getBoundingClientRect().left;
     const scrollerTop = scroller.getBoundingClientRect().top;
     let active = headings[0];
     for (const heading of headings) {
-      if (heading.getBoundingClientRect().top - scrollerTop <= 120) active = heading;
-      else break;
+      const rect = heading.getBoundingClientRect();
+      const headingPosition = rect.left - scrollerLeft + scroller.scrollLeft;
+      const headingPage = nearestPageIndex(headingPosition);
+      if (headingPage < state.currentPage || (headingPage === state.currentPage && rect.top - scrollerTop <= 120)) active = heading;
+      else if (headingPage > state.currentPage) break;
     }
     if (active.id === state.activeHeading) return;
     state.activeHeading = active.id;

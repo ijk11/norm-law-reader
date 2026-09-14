@@ -62,10 +62,10 @@ window.LAW_GENEALOGY = {
     },
     {
       id: "critical-line",
-      title: "권력·경제 비판",
-      question: "중립적으로 보이는 법 뒤의 계급·시장·규율·정체성을 어떻게 읽을까",
+      title: "권력·정체성 비판",
+      question: "중립적으로 보이는 법 뒤의 계급·규율·인종·성별 권력을 어떻게 읽을까",
       tone: "critical",
-      steps: [["bentham", "marx"], ["pashukanis", "foucault", "coase"], ["posner", "kennedy", "unger"], ["bell", "crenshaw", "mackinnon"]]
+      steps: [["marx"], ["pashukanis", "foucault"], ["kennedy", "unger"], ["bell", "crenshaw", "mackinnon"]]
     }
   ],
   debates: [

@@ -2428,6 +2428,473 @@ select:focus-visible,
   height: 18px;
 }
 
+.person-card-actions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.8rem;
+}
+
+.person-card-actions .person-open {
+  min-height: 38px;
+  margin: 0;
+  padding: 0 0 0 0.35rem;
+}
+
+.lecture-trigger,
+.work-lecture-trigger {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  padding: 0.48rem 0.68rem;
+  border: 1px solid color-mix(in srgb, var(--gold) 58%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--gold) 11%, var(--paper));
+  color: color-mix(in srgb, var(--ink) 76%, #a97718);
+  font-size: 0.75rem;
+  font-weight: 820;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.lecture-trigger:hover,
+.work-lecture-trigger:hover,
+.lecture-trigger:focus-visible,
+.work-lecture-trigger:focus-visible {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 20%, var(--paper));
+  outline: none;
+}
+
+.lecture-trigger svg,
+.work-lecture-trigger svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.profile-lecture-action {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: clamp(1.25rem, 3vw, 2rem) clamp(1.25rem, 3vw, 2rem) 0;
+}
+
+.profile-lecture-action p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+}
+
+.profile-works ul {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0;
+  list-style: none;
+}
+
+.profile-works li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.58rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+}
+
+.work-lecture-trigger {
+  min-height: 32px;
+  padding: 0.32rem 0.5rem;
+  font-family: var(--sans);
+  font-size: 0.68rem;
+}
+
+.lecture-backdrop {
+  position: fixed;
+  z-index: 160;
+  inset: 0;
+  border: 0;
+  background: rgba(5, 11, 24, 0.62);
+  opacity: 0;
+  backdrop-filter: blur(5px);
+  transition: opacity 180ms ease;
+}
+
+.lecture-backdrop.is-open {
+  opacity: 1;
+}
+
+.lecture-popover {
+  position: fixed;
+  z-index: 170;
+  top: 50%;
+  left: 50%;
+  width: min(620px, calc(100vw - 2rem));
+  max-height: min(82dvh, 780px);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--gold) 46%, var(--line));
+  border-radius: 22px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 30px 90px rgba(4, 10, 24, 0.38);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, calc(-50% + 16px)) scale(0.985);
+  transition: opacity 180ms ease, transform 180ms ease, visibility 180ms;
+}
+
+.lecture-popover.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.lecture-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  padding: 1.35rem 1.35rem 1.1rem;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--navy) 96%, white), var(--navy-2));
+  color: #fff;
+}
+
+.lecture-eyebrow {
+  color: var(--gold);
+  font-size: 0.7rem;
+  font-weight: 860;
+  letter-spacing: 0.1em;
+}
+
+.lecture-head h2 {
+  margin: 0.42rem 0 0;
+  font-family: var(--reader-font);
+  font-size: clamp(1.45rem, 4vw, 2rem);
+  line-height: 1.25;
+  letter-spacing: -0.035em;
+  word-break: keep-all;
+}
+
+.lecture-subtitle {
+  margin: 0.38rem 0 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.76rem;
+}
+
+.lecture-head .lecture-close {
+  color: #fff;
+}
+
+.lecture-body {
+  max-height: calc(min(82dvh, 780px) - 132px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.45rem 1.35rem 1.35rem;
+}
+
+.lecture-section {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.lecture-section:last-child {
+  border-bottom: 0;
+}
+
+.lecture-section > span {
+  padding-top: 0.16rem;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 860;
+}
+
+.lecture-section p {
+  margin: 0;
+  font-family: var(--reader-font);
+  font-size: 1rem;
+  line-height: 1.78;
+  word-break: keep-all;
+}
+
+.lecture-section.is-takeaway {
+  margin: 0.7rem -0.35rem 0;
+  padding: 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--gold) 42%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--gold) 9%, var(--paper));
+}
+
+.economics-heading {
+  border-bottom-color: color-mix(in srgb, var(--gold) 42%, var(--line));
+}
+
+.economics-questions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-bottom: 1.25rem;
+}
+
+.economics-questions span {
+  display: grid;
+  align-content: start;
+  min-height: 104px;
+  gap: 0.55rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--paper);
+  font-family: var(--reader-font);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.economics-questions b {
+  color: #a27622;
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+.economics-board {
+  position: relative;
+  display: grid;
+  gap: 1rem;
+}
+
+.economics-board::before {
+  position: absolute;
+  z-index: 0;
+  top: 28px;
+  bottom: 28px;
+  left: 30px;
+  width: 1px;
+  background: linear-gradient(var(--gold), var(--accent));
+  content: "";
+}
+
+.economics-era {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 225px minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--paper);
+  box-shadow: 0 12px 35px rgba(22, 33, 58, 0.05);
+}
+
+.economics-era-head {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: 1.1rem;
+  border-right: 1px solid var(--line);
+  background: color-mix(in srgb, var(--navy) 94%, var(--paper));
+  color: #fff;
+}
+
+.economics-era-head > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  background: var(--gold);
+  color: #16213b;
+  font-size: 0.72rem;
+  font-weight: 880;
+}
+
+.economics-era-head p {
+  margin: 0;
+  color: var(--gold);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.economics-era-head h3 {
+  margin: 0.3rem 0 0;
+  font-family: var(--reader-font);
+  font-size: 1.3rem;
+}
+
+.economics-era-head strong {
+  display: block;
+  margin-top: 0.8rem;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.76rem;
+  font-weight: 560;
+  line-height: 1.65;
+}
+
+.economics-node-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  padding: 0.8rem;
+}
+
+.economics-node {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--panel);
+}
+
+.economics-node-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.economics-node-top > div > span {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 840;
+}
+
+.economics-node h4 {
+  margin: 0.28rem 0 0;
+  font-family: var(--reader-font);
+  font-size: 1.15rem;
+}
+
+.economics-node-top p {
+  margin: 0.22rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+}
+
+.economics-node-top i {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  margin-top: 0.35rem;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold) 15%, transparent);
+}
+
+.economics-node > p {
+  margin: 0.75rem 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.65;
+}
+
+.economics-work {
+  display: grid;
+  gap: 0.22rem;
+  margin-top: auto;
+  padding: 0.65rem;
+  border-radius: 9px;
+  background: var(--paper);
+}
+
+.economics-work span {
+  color: var(--ink-soft);
+  font-size: 0.63rem;
+  font-weight: 750;
+}
+
+.economics-work strong {
+  font-family: var(--reader-font);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.economics-node-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+}
+
+.economics-node-actions .lecture-trigger {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.economics-node-actions .lecture-trigger.is-work {
+  border-color: var(--line-strong);
+  background: var(--paper);
+  color: var(--ink-soft);
+}
+
+.economics-toolkit,
+.economics-tensions {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--paper);
+}
+
+.economics-toolkit header > span,
+.economics-tensions header > span {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.economics-toolkit header h3,
+.economics-tensions header h3 {
+  margin: 0.35rem 0 0;
+  font-family: var(--reader-font);
+  font-size: 1.45rem;
+}
+
+.economics-toolkit > div,
+.economics-tensions > div {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.economics-toolkit article,
+.economics-tensions article {
+  padding: 0.85rem;
+  border-radius: 11px;
+  background: var(--panel);
+}
+
+.economics-toolkit article span,
+.economics-tensions article strong {
+  color: var(--ink);
+  font-family: var(--reader-font);
+  font-size: 0.9rem;
+}
+
+.economics-toolkit article p,
+.economics-tensions article p {
+  margin: 0.42rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.economics-tensions {
+  background: color-mix(in srgb, var(--accent) 4%, var(--paper));
+}
+
 .people-pagination {
   display: flex;
   align-items: center;
@@ -2974,6 +3441,20 @@ select:focus-visible,
     grid-template-columns: 1fr;
   }
 
+  .economics-questions,
+  .economics-toolkit > div,
+  .economics-tensions > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .economics-era {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+
+  .economics-node-grid {
+    grid-template-columns: 1fr;
+  }
+
   .era-timeline::before {
     left: 22px;
   }
@@ -3184,6 +3665,45 @@ select:focus-visible,
     grid-template-columns: 1fr;
   }
 
+  .profile-lecture-action {
+    align-items: flex-start;
+    margin: 0.8rem 0.8rem 0;
+  }
+
+  .profile-lecture-action p {
+    padding-top: 0.25rem;
+  }
+
+  .economics-questions {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+  }
+
+  .economics-questions span {
+    min-height: 94px;
+    padding: 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .economics-era {
+    display: block;
+  }
+
+  .economics-era-head {
+    grid-template-columns: auto minmax(0, 1fr);
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .economics-node-grid {
+    padding: 0.6rem;
+  }
+
+  .economics-toolkit > div,
+  .economics-tensions > div {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .person-neighbors {
     gap: 0.5rem;
   }
@@ -3204,11 +3724,52 @@ select:focus-visible,
     position: relative;
     z-index: 24;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     padding: 0.32rem 0.35rem calc(0.32rem + var(--safe-bottom));
     border-top: 1px solid var(--line);
     background: color-mix(in srgb, var(--paper) 94%, transparent);
     backdrop-filter: blur(18px);
+  }
+
+  .genealogy-mobile-bar .bottom-button {
+    font-size: 0.64rem;
+  }
+
+  .lecture-popover {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-height: 86dvh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 22px 22px 0 0;
+    transform: translateY(24px);
+  }
+
+  .lecture-popover.is-open {
+    transform: translateY(0);
+  }
+
+  .lecture-body {
+    max-height: calc(86dvh - 128px);
+    padding: 0.25rem 1rem calc(1.1rem + var(--safe-bottom));
+  }
+
+  .lecture-head {
+    padding: 1.1rem 1rem 0.9rem;
+  }
+
+  .lecture-section {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+    padding: 0.85rem 0;
+  }
+
+  .lecture-section p {
+    font-size: 0.96rem;
+    line-height: 1.72;
   }
 
   .genealogy-footer-note {
@@ -3250,6 +3811,24 @@ select:focus-visible,
   .person-detail {
     grid-template-columns: 1fr;
   }
+
+  .profile-lecture-action {
+    display: grid;
+  }
+
+  .profile-works li {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-works .work-lecture-trigger {
+    justify-self: start;
+  }
+
+  .economics-questions,
+  .economics-toolkit > div,
+  .economics-tensions > div {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media print {
@@ -3274,6 +3853,10 @@ select:focus-visible,
   .settings-panel,
   .mobile-toc,
   .drawer-backdrop,
+  .lecture-backdrop,
+  .lecture-popover,
+  .lecture-trigger,
+  .work-lecture-trigger,
   .toast,
     .reader-progress {
     display: none !important;

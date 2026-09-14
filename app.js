@@ -4,7 +4,8 @@
   const documents = Array.isArray(window.MD_DOCUMENTS) ? window.MD_DOCUMENTS : [];
   const genealogy = window.LAW_GENEALOGY || { eras: [], schools: [], lineages: [], debates: [], people: [], questions: [] };
   const genealogySignatures = window.LAW_GENEALOGY_SIGNATURES || {};
-  const genealogySections = ["overview", "lineages", "eras", "debates", "people"];
+  const lectureData = window.LAW_GENEALOGY_LECTURES || { people: {}, works: {}, economics: null };
+  const genealogySections = ["overview", "lineages", "eras", "debates", "people", "economics"];
   const peoplePerPage = 9;
   const STORAGE_KEY = "norm-law-reader:v1";
   const PROGRESS_KEY = "norm-law-reader:progress:v1";
@@ -30,7 +31,8 @@
     map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 6 5-2.5 7 2.5 5-2.5v14l-5 2.5-7-2.5-5 2.5V6Z"/><path d="M8.5 3.5v14M15.5 6v14"/></svg>',
     people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.5-3.4 2.3-5 5.5-5s5 1.6 5.5 5"/><circle cx="17.5" cy="9" r="2.2"/><path d="M15.5 14.5c3.1-.7 5 .7 5.5 3.5"/></svg>',
     balance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v17M6 20h12M5 6h14M7 6l-4 7h8L7 6Zm10 0-4 7h8l-4-7Z"/></svg>',
-    arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M14 7l5 5-5 5"/></svg>'
+    arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M14 7l5 5-5 5"/></svg>',
+    lightbulb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M8.3 14.5A6 6 0 1 1 15.7 14.5c-.9.7-1.2 1.4-1.2 2.5h-5c0-1.1-.3-1.8-1.2-2.5Z"/><path d="M12 2V1M4.9 4.9l-.7-.7M19.1 4.9l.7-.7"/></svg>'
   };
 
   const preferences = readJson(STORAGE_KEY, {});
@@ -78,7 +80,8 @@
     pageTurnTimer: null,
     pageTurnLocked: false,
     resizeTimer: null,
-    resizeProgress: null
+    resizeProgress: null,
+    lectureReturnFocus: null
   };
 
   const groupOrder = ["영미 논문", "후지타 연구선", "이이다 연구", "서평"];
@@ -134,7 +137,7 @@
         <div class="library-pane genealogy-pane" aria-hidden="true">
           <div class="genealogy-sidebar-summary">
             <strong>고대에서 현대까지</strong>
-            <span>${genealogy.lineages.length}개 계보 · ${genealogy.eras.length}개 시대 · ${genealogy.people.length}명</span>
+            <span>${genealogy.lineages.length}개 큰 계보 · 법경제 심화 · ${genealogy.people.length}명</span>
           </div>
           <nav class="genealogy-sidebar-nav" aria-label="계보 섹션">
             <button type="button" data-genealogy-section="overview"><span>01</span>관점</button>
@@ -142,6 +145,7 @@
             <button type="button" data-genealogy-section="eras"><span>03</span>시대</button>
             <button type="button" data-genealogy-section="debates"><span>04</span>대립</button>
             <button type="button" data-genealogy-section="people"><span>05</span>인물</button>
+            <button type="button" data-genealogy-section="economics"><span>06</span>법경제</button>
           </nav>
           <div class="relation-legend" aria-label="관계 표기 설명">
             <p>관계 읽는 법</p>
@@ -253,6 +257,14 @@
         </div>
         <nav class="mobile-toc-list"></nav>
       </aside>
+      <button class="lecture-backdrop" type="button" data-lecture-close aria-label="1분 강의 닫기" hidden></button>
+      <aside class="lecture-popover" id="lecture-popover" role="dialog" aria-modal="true" aria-labelledby="lecture-title" aria-hidden="true">
+        <header class="lecture-head">
+          <div><span class="lecture-eyebrow"></span><h2 id="lecture-title"></h2><p class="lecture-subtitle"></p></div>
+          <button class="icon-button lecture-close" type="button" data-lecture-close aria-label="1분 강의 닫기">${icons.close}</button>
+        </header>
+        <div class="lecture-body"></div>
+      </aside>
       <div class="toast" role="status" aria-live="polite"></div>
     `;
   }
@@ -282,6 +294,7 @@
         <button class="bottom-button" type="button" data-genealogy-section="eras">${icons.clock}<span>시대</span></button>
         <button class="bottom-button" type="button" data-genealogy-section="debates">${icons.balance}<span>대립</span></button>
         <button class="bottom-button" type="button" data-genealogy-section="people">${icons.people}<span>인물</span></button>
+        <button class="bottom-button" type="button" data-genealogy-section="economics">${icons.lightbulb}<span>법경제</span></button>
         <button class="bottom-button toggle-theme" type="button">${icons.moon}<span>테마</span></button>
       </nav>`;
     updateGenealogyResults({ syncUrl: false });
@@ -299,6 +312,7 @@
     if (state.genealogySection === "eras") return renderErasStage();
     if (state.genealogySection === "debates") return renderDebatesStage();
     if (state.genealogySection === "people") return state.genealogyPersonId ? renderPersonProfile(state.genealogyPersonId) : renderPeopleStage();
+    if (state.genealogySection === "economics") return renderEconomicsStage();
     return renderOverviewStage();
   }
 
@@ -314,6 +328,7 @@
         <div class="genealogy-entry-actions">
           <button type="button" data-genealogy-section="lineages"><span>계보부터 읽기</span>${icons.arrow}</button>
           <button type="button" data-genealogy-section="people"><span>인물 찾아보기</span>${icons.people}</button>
+          <button type="button" data-genealogy-section="economics"><span>법경제학 심화</span>${icons.lightbulb}</button>
         </div>
         <p class="genealogy-reading-note"><strong>표기 원칙</strong> 화살표는 영향·계승을 뜻합니다. ‘직접 논쟁’이라고 표시하지 않은 대립은 후대의 비판 또는 구조적 대비일 수 있습니다.</p>
       </section>
@@ -336,7 +351,7 @@
             }).join("")}</div>${stepIndex < lineage.steps.length - 1 ? `<span class="lineage-arrow" aria-hidden="true">${icons.arrow}</span>` : ""}</div>`).join("")}
         </div>
       </article>`).join("");
-    return `<section class="genealogy-section genealogy-stage" aria-labelledby="lineages-title"><header class="section-heading"><div><span>02 · 큰 계보</span><h2 id="lineages-title">다섯 흐름을 먼저 잡기</h2></div><p>인물을 선택하면 시그니처 개념과 맥락을 포함한 상세 화면으로 이동합니다.</p></header><div class="lineage-board">${markup}</div></section>`;
+    return `<section class="genealogy-section genealogy-stage" aria-labelledby="lineages-title"><header class="section-heading"><div><span>02 · 큰 계보</span><h2 id="lineages-title">다섯 흐름을 먼저 잡기</h2></div><p>인물을 선택하면 시그니처 개념과 맥락을 포함한 상세 화면으로 이동합니다. 법경제학은 별도의 심화 계보에서 더 깊게 다룹니다.</p></header><div class="lineage-board">${markup}</div></section>`;
   }
 
   function renderErasStage() {
@@ -352,6 +367,36 @@
     return `<section class="genealogy-section genealogy-stage" aria-labelledby="debates-title"><header class="section-heading"><div><span>04 · 대립구도</span><h2 id="debates-title">논쟁으로 이해하는 법철학</h2></div><p>직접 충돌과 후대의 이론적 비판을 구분해 각 논쟁이 무엇을 갈라놓았는지 압축했습니다.</p></header><div class="debate-grid">${markup}</div></section>`;
   }
 
+  function renderEconomicsStage() {
+    const economics = lectureData.economics;
+    if (!economics) return `<section class="genealogy-section genealogy-stage"><header class="section-heading"><div><span>06 · 법경제학</span><h2>법경제학 심화를 준비하고 있습니다</h2></div></header></section>`;
+    const stages = economics.stages.map((stage, stageIndex) => `
+      <article class="economics-era">
+        <header class="economics-era-head"><span>${String(stageIndex + 1).padStart(2, "0")}</span><div><p>${escapeHtml(stage.era)}</p><h3>${escapeHtml(stage.title)}</h3><strong>${escapeHtml(stage.shift)}</strong></div></header>
+        <div class="economics-node-grid">
+          ${stage.nodes.map((node) => `
+            <section class="economics-node">
+              <div class="economics-node-top"><div><span>${escapeHtml(node.concept)}</span><h4>${escapeHtml(node.name)}</h4><p>${escapeHtml(node.years)}</p></div><i aria-hidden="true"></i></div>
+              <p>${escapeHtml(node.summary)}</p>
+              <div class="economics-work"><span>대표 저서</span><strong>${escapeHtml(node.work)}</strong></div>
+              <div class="economics-node-actions">
+                <button type="button" class="lecture-trigger" data-lecture-kind="economics-person" data-lecture-id="${escapeAttribute(node.id)}">${icons.lightbulb}<span>인물 1분 강의</span></button>
+                <button type="button" class="lecture-trigger is-work" data-lecture-kind="economics-work" data-lecture-id="${escapeAttribute(node.id)}">${icons.book}<span>저서 1분 강의</span></button>
+              </div>
+            </section>`).join("")}
+        </div>
+      </article>`).join("");
+    return `
+      <section class="genealogy-section genealogy-stage economics-section" aria-labelledby="economics-title">
+        <header class="section-heading economics-heading"><div><span>06 · 법경제학 심화</span><h2 id="economics-title">${escapeHtml(economics.title)}</h2></div><p>${escapeHtml(economics.description)}</p></header>
+        <div class="economics-questions" aria-label="법경제학의 네 가지 질문">${economics.questions.map((question, index) => `<span><b>Q${index + 1}</b>${escapeHtml(question)}</span>`).join("")}</div>
+        <div class="economics-board">${stages}</div>
+        <section class="economics-toolkit"><header><span>분석 도구</span><h3>법경제학자는 무엇을 보는가</h3></header><div>${economics.methods.map((method) => `<article><span>${escapeHtml(method.title)}</span><p>${escapeHtml(method.text)}</p></article>`).join("")}</div></section>
+        <section class="economics-tensions"><header><span>비판과 긴장</span><h3>효율만으로 끝나지 않는 질문</h3></header><div>${economics.tensions.map((tension) => `<article><strong>${escapeHtml(tension.issue)}</strong><p>${escapeHtml(tension.text)}</p></article>`).join("")}</div></section>
+        <footer class="genealogy-footer-note compact"><strong>읽기의 범위</strong><p>법경제학의 고전적 효율 분석뿐 아니라 시장의 법적 토대, 행동경제학, 공동체의 제도 설계까지 한 계보로 묶었습니다.</p><div><a href="https://plato.stanford.edu/entries/legal-econanalysis/" target="_blank" rel="noreferrer">경제적 법분석 개관</a><a href="https://www.law.uchicago.edu/lawecon/coaseinmemoriam/problemofsocialcost" target="_blank" rel="noreferrer">코스 원문</a><a href="https://www.law.harvard.edu/programs/olin_center/papers/abstract236.php" target="_blank" rel="noreferrer">행동법경제학</a></div></footer>
+      </section>`;
+  }
+
   function renderPeopleStage() {
     return `<section class="genealogy-section genealogy-stage people-section" aria-labelledby="people-title"><header class="section-heading"><div><span>05 · 인물별</span><h2 id="people-title">문장과 개념으로 기억하기</h2></div><p>한 쪽에 아홉 명씩 살펴보고, 인물을 열어 핵심 주장·저서·관계를 함께 읽을 수 있습니다.</p></header><div class="people-tools"><label class="genealogy-search-wrap">${icons.search}<span class="sr-only">법철학자 검색</span><input class="genealogy-search" type="search" autocomplete="off" placeholder="인물·개념·주장·저서·관계 검색" value="${escapeAttribute(state.genealogyQuery)}" /></label><div class="people-filter-block"><span>시대</span><div class="people-filter-row" data-filter-group="era"><button type="button" data-era-filter="전체" aria-pressed="true">전체</button>${genealogy.eras.map((era) => `<button type="button" data-era-filter="${escapeAttribute(era.id)}" aria-pressed="false">${escapeHtml(era.label)}</button>`).join("")}</div></div><div class="people-filter-block"><span>사조</span><div class="people-filter-row" data-filter-group="school"><button type="button" data-school-filter="전체" aria-pressed="true">전체</button>${genealogy.schools.map((school) => `<button type="button" data-school-filter="${escapeAttribute(school.id)}" aria-pressed="false">${escapeHtml(school.label)}</button>`).join("")}</div></div></div><div class="people-results-head"><strong class="people-result-count" aria-live="polite"></strong><button type="button" class="reset-genealogy-filters">필터 초기화</button></div><div class="people-grid"></div><nav class="people-pagination" aria-label="인물 목록 쪽 이동"></nav></section>`;
   }
@@ -365,11 +410,11 @@
     const index = genealogy.people.indexOf(person);
     const previous = genealogy.people[index - 1];
     const next = genealogy.people[index + 1];
-    return `<section class="person-profile genealogy-stage" aria-labelledby="person-profile-title"><button type="button" class="person-profile-back" data-people-list>${icons.chevronLeft}<span>인물 목록으로</span></button><article class="person-profile-card"><header class="person-profile-head"><div><span class="person-era">${escapeHtml(era?.label || "")}</span><h1 id="person-profile-title">${escapeHtml(person.name)}</h1><p>${escapeHtml(person.original)} · ${escapeHtml(person.years)}</p><div class="person-schools">${schools.map((school) => `<span>${escapeHtml(school.label)}</span>`).join("")}</div></div><span class="person-number">${String(index + 1).padStart(2, "0")} / ${genealogy.people.length}</span></header>${signature ? `<div class="signature-feature"><span>${escapeHtml(signature.kind)}</span><blockquote>${escapeHtml(signature.text)}</blockquote><p><strong>어떤 맥락인가</strong>${escapeHtml(signature.context)}</p></div>` : ""}<div class="person-profile-grid"><section><span>핵심 주장</span><strong>${escapeHtml(person.role)}</strong><p>${escapeHtml(person.claim)}</p></section><section><span>대표 저서</span><ul>${person.works.map((work) => `<li>${escapeHtml(work)}</li>`).join("")}</ul></section></div><section class="person-profile-relations"><span>관계와 논쟁</span><div>${person.relations.map((relation) => `<p class="relation-${relationTone(relation)}">${escapeHtml(relation)}</p>`).join("")}</div></section></article><nav class="person-neighbors" aria-label="앞뒤 인물">${previous ? `<button type="button" data-person-id="${escapeAttribute(previous.id)}">${icons.chevronLeft}<span><small>이전 인물</small><strong>${escapeHtml(previous.name)}</strong></span></button>` : `<span></span>`}${next ? `<button type="button" data-person-id="${escapeAttribute(next.id)}"><span><small>다음 인물</small><strong>${escapeHtml(next.name)}</strong></span>${icons.chevronRight}</button>` : `<span></span>`}</nav></section>`;
+    return `<section class="person-profile genealogy-stage" aria-labelledby="person-profile-title"><button type="button" class="person-profile-back" data-people-list>${icons.chevronLeft}<span>인물 목록으로</span></button><article class="person-profile-card"><header class="person-profile-head"><div><span class="person-era">${escapeHtml(era?.label || "")}</span><h1 id="person-profile-title">${escapeHtml(person.name)}</h1><p>${escapeHtml(person.original)} · ${escapeHtml(person.years)}</p><div class="person-schools">${schools.map((school) => `<span>${escapeHtml(school.label)}</span>`).join("")}</div></div><span class="person-number">${String(index + 1).padStart(2, "0")} / ${genealogy.people.length}</span></header><div class="profile-lecture-action"><button type="button" class="lecture-trigger" data-lecture-kind="person" data-lecture-id="${escapeAttribute(person.id)}">${icons.lightbulb}<span>이 인물 1분 강의</span></button><p>비유와 사례로 약 500자 안팎에서 쉽게 설명합니다.</p></div>${signature ? `<div class="signature-feature"><span>${escapeHtml(signature.kind)}</span><blockquote>${escapeHtml(signature.text)}</blockquote><p><strong>어떤 맥락인가</strong>${escapeHtml(signature.context)}</p></div>` : ""}<div class="person-profile-grid"><section><span>핵심 주장</span><strong>${escapeHtml(person.role)}</strong><p>${escapeHtml(person.claim)}</p></section><section class="profile-works"><span>대표 저서</span><ul>${person.works.map((work, workIndex) => `<li><span>${escapeHtml(work)}</span><button type="button" class="work-lecture-trigger" data-lecture-kind="work" data-lecture-id="${escapeAttribute(person.id)}" data-work-index="${workIndex}">${icons.book}<span>1분 강의</span></button></li>`).join("")}</ul></section></div><section class="person-profile-relations"><span>관계와 논쟁</span><div>${person.relations.map((relation) => `<p class="relation-${relationTone(relation)}">${escapeHtml(relation)}</p>`).join("")}</div></section></article><nav class="person-neighbors" aria-label="앞뒤 인물">${previous ? `<button type="button" data-person-id="${escapeAttribute(previous.id)}">${icons.chevronLeft}<span><small>이전 인물</small><strong>${escapeHtml(previous.name)}</strong></span></button>` : `<span></span>`}${next ? `<button type="button" data-person-id="${escapeAttribute(next.id)}"><span><small>다음 인물</small><strong>${escapeHtml(next.name)}</strong></span>${icons.chevronRight}</button>` : `<span></span>`}</nav></section>`;
   }
 
   function renderGenealogyPager() {
-    const labels = ["관점", "큰 계보", "시대", "대립", "인물"];
+    const labels = ["관점", "큰 계보", "시대", "대립", "인물", "법경제"];
     const index = Math.max(0, genealogySections.indexOf(state.genealogySection));
     const previous = genealogySections[index - 1];
     const next = genealogySections[index + 1];
@@ -382,7 +427,9 @@
       const eraMatches = state.genealogyEra === "전체" || person.era === state.genealogyEra;
       const schoolMatches = state.genealogySchool === "전체" || person.schools.includes(state.genealogySchool);
       const signature = genealogySignatures[person.id];
-      const searchable = `${person.name} ${person.original} ${person.role} ${person.claim} ${person.works.join(" ")} ${person.relations.join(" ")} ${signature?.text || ""} ${signature?.context || ""}`;
+      const lecture = lectureData.people[person.id];
+      const workNotes = person.works.map((_, index) => lectureData.works[`${person.id}:${index}`] || "").join(" ");
+      const searchable = `${person.name} ${person.original} ${person.role} ${person.claim} ${person.works.join(" ")} ${person.relations.join(" ")} ${signature?.text || ""} ${signature?.context || ""} ${lecture?.analogy || ""} ${lecture?.example || ""} ${lecture?.takeaway || ""} ${workNotes}`;
       return eraMatches && schoolMatches && (!query || normalizeSearch(searchable).includes(query));
     });
   }
@@ -399,7 +446,7 @@
             <div class="person-card-top"><div><span class="person-era">${escapeHtml(era?.label || "")}</span><h3>${escapeHtml(person.name)}</h3><p>${escapeHtml(person.original)} · ${escapeHtml(person.years)}</p></div><span class="person-number">${String(genealogy.people.indexOf(person) + 1).padStart(2, "0")}</span></div>
             <div class="person-schools">${schools.map((school) => `<span>${escapeHtml(school.label)}</span>`).join("")}</div>
             ${signature ? `<div class="person-signature"><span>${escapeHtml(signature.kind)}</span><strong>${escapeHtml(signature.text)}</strong><p>${escapeHtml(signature.context)}</p></div>` : `<strong class="person-role">${escapeHtml(person.role)}</strong><p class="person-claim">${escapeHtml(person.claim)}</p>`}
-            <button type="button" class="person-open" data-person-id="${escapeAttribute(person.id)}"><span>상세 읽기</span>${icons.arrow}</button>
+            <div class="person-card-actions"><button type="button" class="lecture-trigger" data-lecture-kind="person" data-lecture-id="${escapeAttribute(person.id)}">${icons.lightbulb}<span>1분 강의</span></button><button type="button" class="person-open" data-person-id="${escapeAttribute(person.id)}"><span>상세 읽기</span>${icons.arrow}</button></div>
           </article>`;
       })
       .join("");
@@ -409,6 +456,108 @@
     if (/사제|지도|학파/.test(relation)) return "mentor";
     if (/논쟁|비판|대립|쟁점|차이|주의/.test(relation)) return "conflict";
     return "influence";
+  }
+
+  function findEconomicsNode(id) {
+    return lectureData.economics?.stages.flatMap((stage) => stage.nodes).find((node) => node.id === id);
+  }
+
+  function personLecture(person) {
+    const note = lectureData.people[person.id] || {};
+    const signature = genealogySignatures[person.id];
+    return {
+      eyebrow: "인물 · 1분 강의",
+      title: `${person.name}, 한 번에 이해하기`,
+      subtitle: `${person.original} · ${person.years}`,
+      sections: [
+        { label: "먼저 한 문장", text: `${person.name}은 ‘${person.role}’라는 질문으로 기억하면 쉽습니다. ${person.claim}` },
+        { label: "이렇게 비유해요", text: note.analogy || "법이라는 큰 지도를 어떤 렌즈로 읽는지 떠올려 보세요." },
+        { label: "예를 들면", text: note.example || "같은 사건도 이 인물의 기준으로 다시 판단해 보면 이론의 차이가 선명해집니다." },
+        { label: "당시 맥락", text: signature ? `${signature.context} 그래서 ‘${signature.text}’라는 ${signature.kind}이 이 인물의 문제의식을 압축합니다.` : `${person.works.join("·")}에서 이 문제의식을 전개했습니다.` },
+        { label: "기억할 한 줄", text: `${note.takeaway || person.claim} 대표 저서는 ${person.works.join("·")}이며, ${person.relations[0] || "후대 법철학의 논쟁에 영향을 주었습니다."}` }
+      ]
+    };
+  }
+
+  function workLecture(person, workIndex) {
+    const work = person.works[workIndex];
+    if (!work) return null;
+    const note = lectureData.people[person.id] || {};
+    const workFocus = lectureData.works[`${person.id}:${workIndex}`] || `${person.claim}라는 문제를 이 저서에서 구체화합니다.`;
+    const signature = genealogySignatures[person.id];
+    return {
+      eyebrow: "대표 저서 · 1분 강의",
+      title: work,
+      subtitle: `${person.name} · ${person.years}`,
+      sections: [
+        { label: "무슨 책인가", text: `${workFocus} 제목만 외우기보다 ${person.name}이 무엇을 바꾸려 했는지에 초점을 맞추면 읽기가 쉬워집니다.` },
+        { label: "읽는 질문", text: `핵심 질문은 ‘${person.role}’입니다. 즉, ${person.claim}` },
+        { label: "비유로 잡기", text: note.analogy || "이 책을 기존 법질서를 다른 각도에서 비추는 손전등이라고 생각해 보세요." },
+        { label: "사례에 대입", text: note.example || "구체적인 분쟁에 이 책의 기준을 적용해 기존 결론이 어떻게 달라지는지 살펴보면 됩니다." },
+        { label: "왜 지금도 읽나", text: `${signature ? `${signature.kind} ‘${signature.text}’가 이 저작의 문제의식을 압축합니다. ` : ""}${note.takeaway || "후대의 계승과 비판이 이어진 출발점이라는 점이 중요합니다."} 이 저작이 놓인 논쟁 지형은 ‘${person.relations.join(" / ")}’로 함께 기억하면 선후 관계가 또렷해집니다.` }
+      ]
+    };
+  }
+
+  function economicsLecture(node, kind) {
+    const isWork = kind === "economics-work";
+    return {
+      eyebrow: `${isWork ? "대표 저서" : "법경제학자"} · 1분 강의`,
+      title: isWork ? node.work : `${node.name}, 한 번에 이해하기`,
+      subtitle: `${node.name} · ${node.years} · ${node.concept}`,
+      sections: [
+        { label: isWork ? "무슨 글·책인가" : "먼저 한 문장", text: isWork ? `${node.workFocus} 법을 추상적인 명령이 아니라 선택과 비용을 바꾸는 제도로 읽게 해 주는 작업입니다.` : `${node.name}은 ‘${node.concept}’으로 법경제학의 시야를 넓혔습니다. ${node.summary}` },
+        { label: "이렇게 비유해요", text: node.analogy },
+        { label: "예를 들면", text: node.example },
+        { label: "분석의 순서", text: `먼저 법규가 누구에게 어떤 선택지를 주는지 확인하고, 정보·협상·예방·집행에 드는 비용을 셉니다. 그다음 다른 규칙으로 바꾸면 행동과 부담이 어떻게 이동하는지 비교합니다.` },
+        { label: "반대로 물어보기", text: `이 접근이 권하는 규칙에서 이익을 얻는 사람과 비용을 떠안는 사람은 누구인지도 확인해야 합니다. 숫자로 잡히지 않는 존엄·절차·권력 차이가 빠지지 않았는지 묻는 것이 좋은 법경제학 독해입니다.` },
+        { label: "기억할 한 줄", text: `${isWork ? node.summary : node.workFocus} 다만 효율이 높다는 사실만으로 권리와 분배의 정당성까지 자동으로 해결되는 것은 아니라는 한계를 함께 기억해야 합니다.` }
+      ]
+    };
+  }
+
+  function lectureFor(kind, id, workIndex) {
+    if (kind === "person" || kind === "work") {
+      const person = genealogy.people.find((item) => item.id === id);
+      if (!person) return null;
+      return kind === "person" ? personLecture(person) : workLecture(person, workIndex);
+    }
+    const node = findEconomicsNode(id);
+    return node ? economicsLecture(node, kind) : null;
+  }
+
+  function openLecture(kind, id, workIndex, trigger) {
+    const lecture = lectureFor(kind, id, workIndex);
+    const panel = app.querySelector(".lecture-popover");
+    const backdrop = app.querySelector(".lecture-backdrop");
+    if (!lecture || !panel || !backdrop) return;
+    state.lectureReturnFocus = trigger instanceof HTMLElement ? trigger : document.activeElement;
+    panel.querySelector(".lecture-eyebrow").textContent = lecture.eyebrow;
+    panel.querySelector("#lecture-title").textContent = lecture.title;
+    panel.querySelector(".lecture-subtitle").textContent = lecture.subtitle;
+    panel.querySelector(".lecture-body").innerHTML = lecture.sections.map((section, index) => `<section class="lecture-section ${index === lecture.sections.length - 1 ? "is-takeaway" : ""}"><span>${escapeHtml(section.label)}</span><p>${escapeHtml(section.text)}</p></section>`).join("");
+    backdrop.hidden = false;
+    panel.setAttribute("aria-hidden", "false");
+    document.body.dataset.lectureOpen = "true";
+    requestAnimationFrame(() => {
+      backdrop.classList.add("is-open");
+      panel.classList.add("is-open");
+      panel.querySelector(".lecture-close")?.focus();
+    });
+  }
+
+  function closeLecture({ restoreFocus = true } = {}) {
+    const panel = app.querySelector(".lecture-popover");
+    const backdrop = app.querySelector(".lecture-backdrop");
+    if (!panel || panel.getAttribute("aria-hidden") === "true") return false;
+    panel.classList.remove("is-open");
+    backdrop?.classList.remove("is-open");
+    panel.setAttribute("aria-hidden", "true");
+    if (backdrop) backdrop.hidden = true;
+    delete document.body.dataset.lectureOpen;
+    if (restoreFocus && state.lectureReturnFocus instanceof HTMLElement && state.lectureReturnFocus.isConnected) state.lectureReturnFocus.focus();
+    state.lectureReturnFocus = null;
+    return true;
   }
 
   function updateGenealogyResults({ syncUrl = true } = {}) {
@@ -468,6 +617,7 @@
   }
 
   function navigateGenealogy(section, { personId = null, page = 1, replaceHistory = false, skipHistory = false } = {}) {
+    closeLecture({ restoreFocus: false });
     state.genealogySection = genealogySections.includes(section) ? section : "overview";
     state.genealogyPersonId = state.genealogySection === "people" && genealogy.people.some((person) => person.id === personId) ? personId : null;
     state.genealogyPeoplePage = Math.max(1, Number.parseInt(page, 10) || 1);
@@ -483,6 +633,7 @@
   }
 
   function setView(view, { replaceHistory = false, skipHistory = false } = {}) {
+    closeLecture({ restoreFocus: false });
     state.view = view === "genealogy" ? "genealogy" : "reader";
     app.dataset.view = state.view;
     app.querySelectorAll(".primary-tab[data-app-view]").forEach((button) => button.setAttribute("aria-selected", String(button.dataset.appView === state.view)));
@@ -702,6 +853,17 @@
     });
 
     app.addEventListener("click", (event) => {
+      if (event.target.closest("[data-lecture-close]")) {
+        closeLecture();
+        return;
+      }
+
+      const lectureTrigger = event.target.closest("[data-lecture-kind]");
+      if (lectureTrigger) {
+        openLecture(lectureTrigger.dataset.lectureKind, lectureTrigger.dataset.lectureId, Number.parseInt(lectureTrigger.dataset.workIndex, 10) || 0, lectureTrigger);
+        return;
+      }
+
       const viewTab = event.target.closest("[data-app-view]");
       if (viewTab) {
         setView(viewTab.dataset.appView);
@@ -922,6 +1084,19 @@
     document.addEventListener("selectionchange", captureArticleSelection);
 
     document.addEventListener("keydown", (event) => {
+      const lecturePanel = app.querySelector(".lecture-popover[aria-hidden='false']");
+      if (lecturePanel && event.key === "Tab") {
+        const focusable = [...lecturePanel.querySelectorAll("button:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])")];
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
       const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "");
       if (event.key === "/" && !typing) {
         event.preventDefault();
@@ -937,7 +1112,9 @@
         event.preventDefault();
         removeHighlight(highlightMark.dataset.highlightId);
       }
-      if (event.key === "Escape") closeDrawers();
+      if (event.key === "Escape") {
+        if (!closeLecture()) closeDrawers();
+      }
 
       const selection = window.getSelection();
       const inArticle = event.target === scroller || event.target.closest?.(".article-scroll");

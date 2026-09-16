@@ -84,7 +84,7 @@
     lectureReturnFocus: null
   };
 
-  const groupOrder = ["영미 논문", "후지타 연구선", "이이다 연구", "서평"];
+  const groupOrder = ["영미 논문", "일본 논문", "후지타 연구선", "이이다 연구", "서평"];
   const filters = ["전체", ...groupOrder];
   const app = document.getElementById("app");
 
@@ -660,7 +660,7 @@
     filterRow.innerHTML = filters
       .map(
         (filter) =>
-          `<button class="filter-chip" type="button" data-filter="${escapeAttribute(filter)}" aria-pressed="${state.filter === filter}">${filter === "영미 논문" ? "영미" : filter === "후지타 연구선" ? "후지타" : filter === "이이다 연구" ? "이이다" : filter}</button>`
+          `<button class="filter-chip" type="button" data-filter="${escapeAttribute(filter)}" aria-pressed="${state.filter === filter}">${filter === "영미 논문" ? "영미" : filter === "일본 논문" ? "일본" : filter === "후지타 연구선" ? "후지타" : filter === "이이다 연구" ? "이이다" : filter}</button>`
       )
       .join("");
 

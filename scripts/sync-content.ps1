@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$SourceDirectory = (Join-Path $PSScriptRoot '..\..'),
     [string]$EnglishSourceDirectory = (Join-Path $PSScriptRoot '..\..\..\md\영미')
 )
@@ -23,7 +23,7 @@ $documents = $sources | ForEach-Object {
     Get-ChildItem -LiteralPath $source.Path -File -Filter '*.md' |
         Where-Object { $_.Name -ne '_작업메모.md' } |
         ForEach-Object {
-        $content = Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8
+        $content = [IO.File]::ReadAllText($_.FullName, [Text.UTF8Encoding]::new($false))
         $titleMatch = [regex]::Match($content, '(?m)^#\s+(.+)$')
         $title = if ($titleMatch.Success) { $titleMatch.Groups[1].Value.Trim() } else { $_.BaseName }
         $yearMatch = [regex]::Match($content.Substring(0, [Math]::Min($content.Length, 5000)), '(?:19|20)\d{2}')
@@ -35,8 +35,10 @@ $documents = $sources | ForEach-Object {
             '이이다 연구'
         } elseif ($_.Name.StartsWith('후지타 도모타카')) {
             '후지타 연구선'
-        } else {
+        } elseif ($_.Name -match '서평') {
             '서평'
+        } else {
+            '일본 논문'
         }
 
         $author = if ($_.Name.StartsWith('이이다 다카시')) {

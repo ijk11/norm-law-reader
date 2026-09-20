@@ -333,6 +333,41 @@ select:focus-visible,
   font-size: 0.8rem;
 }
 
+.doc-card-match {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.42rem;
+  margin-top: 0.52rem;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.78rem;
+  line-height: 1.48;
+}
+
+.doc-card-match-label {
+  padding: 0.04rem 0.32rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.68rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.doc-card-match-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.doc-card mark {
+  padding: 0 0.08em;
+  border-radius: 0.18em;
+  background: #ffe08a;
+  color: #172039;
+}
+
 .doc-progress-track {
   position: absolute;
   right: 0.82rem;

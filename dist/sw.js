@@ -1,13 +1,13 @@
-const CACHE_NAME = "norm-law-reader-v17";
+const CACHE_NAME = "norm-law-reader-v18";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=17",
-  "./app.js?v=17",
-  "./content.js?v=17",
-  "./genealogy-data.js?v=17",
-  "./genealogy-signatures.js?v=17",
-  "./genealogy-lectures.js?v=17",
+  "./styles.css?v=18",
+  "./app.js?v=18",
+  "./content.js?v=18",
+  "./genealogy-data.js?v=18",
+  "./genealogy-signatures.js?v=18",
+  "./genealogy-lectures.js?v=18",
   "./manifest.webmanifest",
   "./favicon.svg",
   "./icon-192.png",

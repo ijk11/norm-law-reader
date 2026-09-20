@@ -87,6 +87,17 @@
   const groupOrder = ["영미 논문", "일본 논문", "후지타 연구선", "이이다 연구", "서평"];
   const filters = ["전체", ...groupOrder];
   const app = document.getElementById("app");
+  const documentSearchIndex = new Map(
+    documents.map((doc) => [
+      doc.id,
+      [
+        createSearchField("제목", doc.title),
+        createSearchField("저자", doc.author),
+        createSearchField("파일명", doc.file),
+        createSearchField("본문", plainSearchText(doc.content))
+      ]
+    ])
+  );
 
   if (!documents.length) {
     app.innerHTML = '<main class="reader"><p class="boot-message">불러올 문서가 없습니다. 먼저 동기화 스크립트를 실행해 주세요.</p></main>';
@@ -122,7 +133,7 @@
             <label class="search-wrap">
               <span class="sr-only">문서 검색</span>
               ${icons.search}
-              <input class="search-input" type="search" autocomplete="off" placeholder="제목·저자·본문 검색" />
+              <input class="search-input" type="search" autocomplete="off" placeholder="파일명·제목·저자·본문 검색" />
               <button class="search-clear" type="button" aria-label="검색어 지우기" hidden>${icons.close}</button>
             </label>
             <div class="filter-row" aria-label="연구선 필터"></div>
@@ -665,11 +676,12 @@
       .join("");
 
     const normalizedQuery = normalizeSearch(state.query);
-    const visible = sortedDocuments().filter((doc) => {
-      const groupMatches = state.filter === "전체" || doc.group === state.filter;
-      const textMatches = !normalizedQuery || normalizeSearch(`${doc.title} ${doc.author} ${doc.content}`).includes(normalizedQuery);
-      return groupMatches && textMatches;
-    });
+    const visible = sortedDocuments()
+      .map((doc) => ({ doc, match: documentSearchMatch(doc, state.query) }))
+      .filter(({ doc, match }) => {
+        const groupMatches = state.filter === "전체" || doc.group === state.filter;
+        return groupMatches && (!normalizedQuery || match);
+      });
 
     app.querySelector(".library-summary").innerHTML = `<span>${visible.length}편</span><span>${state.query ? `“${escapeHtml(state.query)}” 검색` : "전체 문서"}</span>`;
     const list = app.querySelector(".doc-list");
@@ -680,9 +692,9 @@
     }
 
     const byGroup = new Map();
-    visible.forEach((doc) => {
-      if (!byGroup.has(doc.group)) byGroup.set(doc.group, []);
-      byGroup.get(doc.group).push(doc);
+    visible.forEach((result) => {
+      if (!byGroup.has(result.doc.group)) byGroup.set(result.doc.group, []);
+      byGroup.get(result.doc.group).push(result);
     });
 
     list.innerHTML = groupOrder
@@ -692,11 +704,12 @@
           <p class="group-label">${escapeHtml(group)}</p>
           ${byGroup
             .get(group)
-            .map((doc) => {
+            .map(({ doc, match }) => {
               const progress = Math.round((Number(savedProgress[doc.id]) || 0) * 100);
               return `<button class="doc-card" type="button" data-doc-id="${escapeAttribute(doc.id)}" aria-current="${doc.id === state.currentId}">
                 <span class="doc-card-title">${highlightText(doc.title, state.query)}</span>
-                <span class="doc-card-meta"><span>${escapeHtml(doc.author)}</span><span>·</span><span>${doc.kind}</span></span>
+                <span class="doc-card-meta"><span>${highlightText(doc.author, state.query)}</span><span>·</span><span>${doc.kind}</span></span>
+                ${match ? `<span class="doc-card-match"><span class="doc-card-match-label">${match.source}</span><span class="doc-card-match-text">${highlightText(match.excerpt, state.query)}</span></span>` : ""}
                 <span class="doc-progress-track" aria-hidden="true"><span class="doc-progress-value" style="--doc-progress:${progress}%"></span></span>
               </button>`;
             })
@@ -1773,6 +1786,45 @@
     const safe = escapeHtml(text);
     const escapedQuery = escapeRegExp(escapeHtml(query));
     return safe.replace(new RegExp(`(${escapedQuery})`, "ig"), "<mark>$1</mark>");
+  }
+
+  function documentSearchMatch(doc, query) {
+    const normalizedQuery = normalizeSearch(query);
+    if (!normalizedQuery) return null;
+    const fields = documentSearchIndex.get(doc.id) || [];
+    for (const field of fields) {
+      const matchIndex = field.normalized.indexOf(normalizedQuery);
+      if (matchIndex >= 0) {
+        return {
+          source: field.source,
+          excerpt: searchExcerpt(field.text, matchIndex, normalizedQuery.length, field.source === "본문")
+        };
+      }
+    }
+    return null;
+  }
+
+  function createSearchField(source, value) {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    return { source, text, normalized: normalizeSearch(text) };
+  }
+
+  function plainSearchText(markdown) {
+    return String(markdown || "")
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/!\[([^\]]*)\]\([^)]+\)/g, " $1 ")
+      .replace(/\[([^\]]+)]\([^)]+\)/g, " $1 ")
+      .replace(/<https?:\/\/[^>]+>/g, " ")
+      .replace(/[#>*_`~|=-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function searchExcerpt(text, matchIndex, queryLength, addContext) {
+    if (!addContext) return text;
+    const start = Math.max(0, matchIndex - 46);
+    const end = Math.min(text.length, matchIndex + queryLength + 70);
+    return `${start > 0 ? "…" : ""}${text.slice(start, end).trim()}${end < text.length ? "…" : ""}`;
   }
 
   function normalizeSearch(value) {
